@@ -1,0 +1,264 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg-base: var(--bg-base);
+  --color-surface: var(--surface);
+  --color-surface-hover: var(--surface-hover);
+  --color-border-subtle: var(--border-subtle);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-tertiary: var(--text-tertiary);
+  
+  --shadow-glow: var(--shadow-glow-val);
+  --shadow-float: var(--shadow-float-val);
+}
+
+:root {
+  /* Dark mode (default) */
+  --bg-base: #050505;
+  --surface: #121212;
+  --surface-hover: #1A1A1A;
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --accent: #FFFFFF;
+  --accent-fg: #000000;
+  --text-primary: #EDEDED;
+  --text-secondary: #888888;
+  --text-tertiary: #555555;
+  --shadow-glow-val: 0 0 20px rgba(255, 255, 255, 0.1);
+  --shadow-float-val: 0 20px 40px rgba(0, 0, 0, 0.8);
+}
+
+.light {
+  /* Light mode */
+  --bg-base: #F5F5F5;
+  --surface: #FFFFFF;
+  --surface-hover: #E5E5E5;
+  --border-subtle: rgba(0, 0, 0, 0.1);
+  --accent: #000000;
+  --accent-fg: #FFFFFF;
+  --text-primary: #111111;
+  --text-secondary: #666666;
+  --text-tertiary: #999999;
+  --shadow-glow-val: 0 0 20px rgba(0, 0, 0, 0.1);
+  --shadow-float-val: 0 10px 30px rgba(0, 0, 0, 0.1);
+}
+
+body {
+  background-color: var(--color-bg-base);
+  color: var(--color-text-primary);
+  font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  
+  /* Modern Grid Background */
+  background-image:
+    linear-gradient(var(--color-border-subtle) 1px, transparent 1px),
+    linear-gradient(90deg, var(--color-border-subtle) 1px, transparent 1px);
+  background-size: 32px 32px;
+  background-position: center top;
+  background-attachment: fixed;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Custom scrollbar for dark theme */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-subtle);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-tertiary);
+}
+
+@keyframes pulse-glow {
+  0% { box-shadow: 0 0 0 0 rgba(255, 184, 0, 0.4); }
+  70% { box-shadow: 0 0 0 15px rgba(255, 184, 0, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 184, 0, 0); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s infinite;
+}
+
+.shimmer {
+  background: linear-gradient(90deg, 
+    var(--color-surface) 25%, 
+    var(--color-surface-hover) 50%, 
+    var(--color-surface) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite linear;
+}
+
+.shimmer-dark {
+  background: linear-gradient(90deg, 
+    rgba(255,255,255,0.03) 25%, 
+    rgba(255,255,255,0.08) 50%, 
+    rgba(255,255,255,0.03) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite linear;
+}
+
+.media-loading {
+  filter: blur(4px);
+  transform: scale(1.02);
+  opacity: 0.8;
+  transition: filter 0.4s ease-out, transform 0.4s ease-out, opacity 0.4s ease-out;
+}
+
+.media-loaded {
+  filter: blur(0);
+  transform: scale(1);
+  opacity: 1;
+}
+
+/* ===========================================
+   MOBILE NATIVE — Adicionado sem sobrescrever
+   =========================================== */
+
+/* Safe areas para dispositivos com notch (iPhone X+, Android punch-hole) */
+:root {
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-left: env(safe-area-inset-left, 0px);
+  --safe-area-right: env(safe-area-inset-right, 0px);
+}
+
+/* Scroll nativo suave — sensação de app */
+html, body {
+  scroll-behavior: smooth;
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Previne overflow horizontal */
+body, #root {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+/* Elimina highlight azul/cinza ao clicar no mobile */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Mantém texto seleccionável onde faz sentido */
+p, span, h1, h2, h3, h4, h5, h6, li, td, label {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Touch targets mínimos 44px — WCAG + Apple HIG */
+button, [role="button"], a {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Imagens e media responsivos por padrão */
+img, video, iframe {
+  max-width: 100%;
+}
+
+/* Previne zoom em inputs iOS (font-size >= 16px resolve) */
+@media screen and (max-width: 767px) {
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="number"],
+  input[type="tel"],
+  input[type="url"],
+  input[type="search"],
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+/* Header com safe area para notch */
+header {
+  padding-top: var(--safe-area-top);
+}
+
+/* Modais responsivos no mobile */
+@media screen and (max-width: 767px) {
+  [class*="max-w-4xl"],
+  [class*="max-w-3xl"] {
+    max-width: calc(100vw - 2rem) !important;
+  }
+}
+
+/* Scrollbar mais fina no mobile */
+@media screen and (max-width: 767px) {
+  ::-webkit-scrollbar {
+    width: 3px;
+    height: 3px;
+  }
+}
+
+/* Banner de instalação PWA */
+.pwa-install-banner {
+  position: fixed;
+  bottom: calc(var(--safe-area-bottom) + 1rem);
+  left: 1rem;
+  right: 1rem;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  background: #1A1A1A;
+  border: 1px solid rgba(255, 184, 0, 0.3);
+  border-radius: 1.25rem;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+  animation: slide-up 0.4s ease-out;
+}
+
+@keyframes slide-up {
+  from { transform: translateY(120%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* ─── Scrollbar Utilities ─────────────────── */
+.custom-scrollbar::-webkit-scrollbar { width: 3px; height: 3px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 2px; }
+
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* ─── Safe Area Padding Utilities ────────── */
+.pt-safe-top { padding-top: env(safe-area-inset-top, 0px); }
+.pb-safe-bottom { padding-bottom: env(safe-area-inset-bottom, 20px); }
+
+/* ─── Touch manipulation ──────────────────── */
+.touch-manipulation { touch-action: manipulation; }
+
+/* ─── Native bottom sheet animation ─────── */
+@keyframes slide-in-from-bottom {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+.animate-in.slide-in-from-bottom {
+  animation: slide-in-from-bottom 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* ─── Mobile: remove min-height on small buttons ─ */
+@media screen and (max-width: 767px) {
+  .sidebar-icon-btn {
+    min-height: unset;
+    min-width: unset;
+  }
+}
