@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Conversio Pro Editor</title>
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Bebas+Neue&family=Dancing+Script&family=Lato&family=Merriweather&family=Montserrat&family=Open+Sans&family=Oswald&family=Pacifico&family=Playfair+Display&family=Raleway&family=Roboto&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-main: #0E0E10;
+      --bg-panel: #18181B;
+      --bg-hover: #27272A;
+      --border: #3F3F46;
+      --accent: #FFB800;
+      --text: #F4F4F5;
+      --text-muted: #A1A1AA;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Roboto', sans-serif; }
+    body { background-color: var(--bg-main); color: var(--text); display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+    
+    /* Top Bar */
+    header { height: 60px; background: var(--bg-panel); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 20px; z-index: 10; }
+    .header-left, .header-center, .header-right { display: flex; align-items: center; gap: 15px; }
+    .project-name { background: transparent; border: none; color: var(--text); font-size: 16px; font-weight: bold; outline: none; }
+    button { background: var(--bg-hover); color: var(--text); border: 1px solid var(--border); padding: 8px 12px; border-radius: 6px; cursor: pointer; transition: 0.2s; font-size: 13px; }
+    button:hover { background: var(--border); }
+    button.primary { background: var(--accent); color: #000; font-weight: bold; border: none; }
+    button.primary:hover { filter: brightness(1.1); background: var(--accent); }
+    
+    /* Main Layout */
+    main { display: flex; flex: 1; overflow: hidden; }
+    
+    /* Left Sidebar */
+    .sidebar-left { width: 80px; background: var(--bg-panel); border-right: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; padding: 20px 0; gap: 20px; z-index: 10; }
+    .tool-btn { display: flex; flex-direction: column; align-items: center; justify-content: center; background: none; border: none; color: var(--text-muted); gap: 5px; cursor: pointer; width: 100%; padding: 10px 0; }
+    .tool-btn:hover, .tool-btn.active { color: var(--accent); }
+    .tool-btn svg { width: 24px; height: 24px; fill: currentColor; }
+    .tool-btn span { font-size: 11px; }
+
+    /* Extended Left Panel (Filters, Layers, etc) */
+    .sidebar-ext { width: 250px; background: var(--bg-panel); border-right: 1px solid var(--border); display: none; flex-direction: column; padding: 20px; overflow-y: auto; z-index: 9; }
+    .sidebar-ext.open { display: flex; }
+    .sidebar-ext h3 { margin-bottom: 20px; font-size: 14px; text-transform: uppercase; color: var(--text-muted); letter-spacing: 1px; }
+
+    /* Center Canvas Area */
+    .canvas-wrapper { flex: 1; background: var(--bg-main); overflow: auto; display: flex; align-items: center; justify-content: center; position: relative; }
+    .canvas-container { position: relative; box-shadow: 0 10px 40px rgba(0,0,0,0.5); background: transparent; }
+    canvas { display: block; }
+    
+    /* Right Sidebar (Properties) */
+    .sidebar-right { width: 300px; background: var(--bg-panel); border-left: 1px solid var(--border); padding: 20px; overflow-y: auto; z-index: 10; display: flex; flex-direction: column; gap: 20px; }
+    .prop-group { display: flex; flex-direction: column; gap: 10px; border-bottom: 1px solid var(--border); padding-bottom: 15px; }
+    .prop-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+    .sidebar-right label { font-size: 12px; color: var(--text-muted); }
+    .sidebar-right input[type="text"], .sidebar-right input[type="number"], .sidebar-right select { width: 100%; background: var(--bg-main); border: 1px solid var(--border); color: var(--text); padding: 8px; border-radius: 4px; outline: none; }
+    .sidebar-right input[type="color"] { background: none; border: none; width: 30px; height: 30px; cursor: pointer; }
+    .sidebar-right input[type="range"] { flex: 1; }
+    
+    /* Forms & Controls */
+    .hidden-input { display: none; }
+    .layer-item { display: flex; align-items: center; justify-content: space-between; padding: 8px; background: var(--bg-main); border: 1px solid var(--border); border-radius: 6px; margin-bottom: 8px; cursor: pointer; }
+    .layer-item.selected { border-color: var(--accent); }
+    
+    /* Utilities */
+    .d-none { display: none !important; }
+    
+  </style>
+</head>
+<body>
+
+  <!-- TOP BAR -->
+  <header>
+    <div class="header-left">
+      <input type="text" class="project-name" id="projectName" value="Arte Sem Nome">
+      <button onclick="undo()">↶ Desfazer</button>
+      <button onclick="redo()">↷ Refazer</button>
+    </div>
+    <div class="header-center">
+      <button onclick="setZoom(0.5)">50%</button>
+      <button onclick="setZoom(1)">100%</button>
+      <button onclick="fitToScreen()">Ajustar à Tela</button>
+    </div>
+    <div class="header-right">
+      <button onclick="saveProject()">💾 Salvar Projeto</button>
+      <input type="file" id="loadProjectInput" class="hidden-input" accept=".json" onchange="loadProject(event)">
+      <button onclick="document.getElementById('loadProjectInput').click()">📂 Abrir</button>
+      <button class="primary" onclick="exportImage()">⬇ Exportar</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- LEFT SIDEBAR -->
+    <div class="sidebar-left">
+      <input type="file" id="bgImgInput" class="hidden-input" accept="image/*" onchange="loadBackgroundImage(event)">
+      <button class="tool-btn" onclick="document.getElementById('bgImgInput').click()">
+        <svg viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+        <span>Fundo</span>
+      </button>
+
+      <input type="file" id="logoInput" class="hidden-input" accept="image/png, image/svg+xml" onchange="addLogo(event)">
+      <button class="tool-btn" onclick="document.getElementById('logoInput').click()">
+        <svg viewBox="0 0 24 24"><path d="M12 2L2 22h20L12 2zm0 3.8l6.2 12.2H5.8L12 5.8z"/></svg>
+        <span>Símbolo</span>
+      </button>
+
+      <button class="tool-btn" onclick="addText()">
+        <svg viewBox="0 0 24 24"><path d="M2.5 4v3h5v12h3V7h5V4h-13z"/></svg>
+        <span>Texto</span>
+      </button>
+
+      <button class="tool-btn" onclick="addShape('rectangle')">
+        <svg viewBox="0 0 24 24"><path d="M3 3h18v18H3V3z"/></svg>
+        <span>Forma</span>
+      </button>
+
+      <button class="tool-btn" onclick="toggleExtPanel('filters')">
+        <svg viewBox="0 0 24 24"><path d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z"/></svg>
+        <span>Ajustes</span>
+      </button>
+
+      <button class="tool-btn" onclick="toggleExtPanel('layers')">
+        <svg viewBox="0 0 24 24"><path d="M11.99 18.54l-7.37-5.73L3 14.07l9 7 9-7-1.63-1.27-7.38 5.74zM12 16l7.36-5.73L21 9l-9-7-9 7 1.63 1.27L12 16z"/></svg>
+        <span>Camadas</span>
+      </button>
+    </div>
+
+    <!-- LEFT EXTENDED PANEL -->
+    <div class="sidebar-ext" id="extPanel">
+      <div id="panel-filters" class="d-none">
+        <h3>Ajustes de Fundo</h3>
+        <div class="prop-group">
+          <label>Brilho</label>
+          <input type="range" id="filter-brightness" min="-100" max="100" value="0" oninput="updateFilters()">
+          <label>Contraste</label>
+          <input type="range" id="filter-contrast" min="-100" max="100" value="0" oninput="updateFilters()">
+          <label>Saturação</label>
+          <input type="range" id="filter-saturate" min="-100" max="100" value="0" oninput="updateFilters()">
+          <label>Matiz (Hue)</label>
+          <input type="range" id="filter-hue" min="0" max="360" value="0" oninput="updateFilters()">
+          <label>Desfoque</label>
+          <input type="range" id="filter-blur" min="0" max="20" value="0" oninput="updateFilters()">
+          <label>Sépia</label>
+          <input type="range" id="filter-sepia" min="0" max="100" value="0" oninput="updateFilters()">
+          <button onclick="resetFilters()" style="margin-top:10px;">Resetar Ajustes</button>
+        </div>
+      </div>
+      <div id="panel-layers" class="d-none">
+        <h3>Camadas (<span id="layerCount">0</span>)</h3>
+        <div id="layersList"></div>
+      </div>
+    </div>
+
+    <!-- CANVAS WRAPPER -->
+    <div class="canvas-wrapper" id="canvasWrapper">
+      <div class="canvas-container" id="canvasContainer">
+        <canvas id="mainCanvas" width="1080" height="1080"></canvas>
+      </div>
+    </div>
+
+    <!-- RIGHT SIDEBAR (Properties) -->
+    <div class="sidebar-right" id="propertiesPanel">
+      <div id="noSelectionMsg" style="text-align:center; color: var(--text-muted); margin-top:50px;">
+        Nenhum elemento selecionado.
+      </div>
+      <div id="propContent" class="d-none">
+        <!-- Dyn Content populated by JS -->
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // System State
+    let canvas = document.getElementById('mainCanvas');
+    let ctx = canvas.getContext('2d');
+    
+    let db = {
+      width: 1080,
+      height: 1080,
+      bgImage: null,
+      filters: { brightness: 0, contrast: 0, saturate: 0, hue: 0, blur: 0, sepia: 0 },
+      elements: [] // { id, type (text|image|shape), x, y, width, height, rotation, opacity, ... }
+    };
+    
+    let history = [];
+    let historyIndex = -1;
+    let selectedId = null;
+    let zoomLevel = 1;
+    let isDragging = false, isResizing = false, isRotating = false;
+    let dragHandle = null;
+    let dragStartX = 0, dragStartY = 0;
+    let originalElemState = null;
+
+    // Fonts Google
+    const FONTS = ['Roboto', 'Open Sans', 'Montserrat', 'Playfair Display', 'Lato', 'Oswald', 'Raleway', 'Merriweather', 'Pacifico', 'Dancing Script', 'Bebas Neue', 'Anton'];
+
+    // Utility to save state
+    function saveState() {
+      // Create deep copy ignoring DOM elements like images directly, but we store their base64 source
+      const state = JSON.stringify(db, (key, val) => {
+        if(key === 'imgElement') return undefined; // do not serialize HTMLImageElement
+        return val;
+      });
+      if(historyIndex < history.length - 1) history.splice(historyIndex + 1);
+      history.push(state);
+      if(history.length > 30) history.shift();
+      else historyIndex++;
+      updateLayersPanel();
+    }
+
+    function undo() {
+      if(historyIndex > 0) {
+        historyIndex--;
+        restoreState(history[historyIndex]);
+      }
+    }
+
+    function redo() {
+      if(historyIndex < history.length - 1) {
+        historyIndex++;
+        restoreState(history[historyIndex]);
+      }
+    }
+
+    async function restoreState(stateStr) {
+      const parsed = JSON.parse(stateStr);
+      db = parsed;
+      // Re-load images
+      if(db.bgImage && db.bgImage.src) {
+        const img = new Image();
+        img.src = db.bgImage.src;
+        await new Promise(r => img.onload = r);
+        db.bgImage.imgElement = img;
+      }
+      for(let el of db.elements) {
+        if(el.type === 'image' && el.src) {
+          const img = new Image();
+          img.src = el.src;
+          await new Promise(r => img.onload = r);
+          el.imgElement = img;
+        }
+      }
+      selectedId = null; // reset selection on undo/redo to avoid glitch
+      render();
+      updatePropertiesPanel();
+      updateLayersPanel();
+    }
+
+    // Initialize Empty State
+    saveState();
+
+    // === CANVAS RENDERER ===
+    function render() {
+      // Size container based on zoom
+      document.getElementById('canvasContainer').style.width = `${db.width * zoomLevel}px`;
+      document.getElementById('canvasContainer').style.height = `${db.height * zoomLevel}px`;
+      document.getElementById('canvasContainer').style.transform = `scale(${zoomLevel})`;
+      document.getElementById('canvasContainer').style.transformOrigin = 'top left';
+      
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      // Draw BG Image
+      if(db.bgImage && db.bgImage.imgElement) {
+        ctx.save();
+        const f = db.filters;
+        ctx.filter = `brightness(${100 + parseInt(f.brightness)}%) contrast(${100 + parseInt(f.contrast)}%) saturate(${100 + parseInt(f.saturate)}%) hue-rotate(${f.hue}deg) blur(${f.blur}px) sepia(${f.sepia}%)`;
+        ctx.drawImage(db.bgImage.imgElement, 0, 0, canvas.width, canvas.height);
+        ctx.restore();
+      } else {
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0,0, canvas.width, canvas.height);
+      }
+
+      // Draw Elements
+      db.elements.forEach(el => {
+        ctx.save();
+        ctx.globalAlpha = el.opacity !== undefined ? el.opacity / 100 : 1;
+        if(el.blendMode) ctx.globalCompositeOperation = el.blendMode;
+        
+        ctx.translate(el.x + el.width/2, el.y + el.height/2);
+        ctx.rotate(el.rotation * Math.PI / 180);
+        
+        // Shadow base
+        if(el.shadow && el.shadow.active) {
+          ctx.shadowColor = el.shadow.color;
+          ctx.shadowBlur = el.shadow.blur;
+          ctx.shadowOffsetX = el.shadow.offsetX;
+          ctx.shadowOffsetY = el.shadow.offsetY;
+        }
+
+        if(el.type === 'image' && el.imgElement) {
+          ctx.drawImage(el.imgElement, -el.width/2, -el.height/2, el.width, el.height);
+        } else if(el.type === 'shape') {
+          ctx.fillStyle = el.fill || '#FFB800';
+          if(el.shapeType === 'rectangle') {
+            ctx.fillRect(-el.width/2, -el.height/2, el.width, el.height);
+            if(el.strokeWidth) {
+              ctx.strokeStyle = el.stroke;
+              ctx.lineWidth = el.strokeWidth;
+              ctx.strokeRect(-el.width/2, -el.height/2, el.width, el.height);
+            }
+          } else if(el.shapeType === 'circle') {
+            ctx.beginPath();
+            ctx.arc(0, 0, Math.min(el.width, el.height)/2, 0, Math.PI*2);
+            ctx.fill();
+            if(el.strokeWidth) { ctx.strokeStyle=el.stroke; ctx.lineWidth=el.strokeWidth; ctx.stroke(); }
+          }
+        } else if(el.type === 'text') {
+           ctx.font = `${el.bold?'bold ':''}${el.italic?'italic ':''}${el.fontSize}px "${el.fontFamily}"`;
+           ctx.fillStyle = el.color;
+           ctx.textAlign = el.align || 'center';
+           ctx.textBaseline = 'middle';
+           
+           if(el.bgActive) {
+             ctx.save();
+             ctx.shadowColor='transparent';
+             ctx.fillStyle = el.bgColor;
+             ctx.fillRect(-el.width/2, -el.height/2, el.width, el.height);
+             ctx.restore();
+           }
+           
+           let drawX = 0;
+           if(el.align === 'left') drawX = -el.width/2 + 10;
+           if(el.align === 'right') drawX = el.width/2 - 10;
+           
+           ctx.fillText(el.text, drawX, 0);
+        }
+        ctx.restore();
+      });
+
+      // Draw Selection Handles Overlay
+      if(selectedId) {
+        const sel = db.elements.find(e => e.id === selectedId);
+        if(sel) drawSelectionBox(sel);
+      }
+      
+      requestAnimationFrame(render);
+    }
+
+    function drawSelectionBox(el) {
+       ctx.save();
+       ctx.translate(el.x + el.width/2, el.y + el.height/2);
+       ctx.rotate(el.rotation * Math.PI / 180);
+       
+       ctx.strokeStyle = '#FFB800';
+       ctx.lineWidth = 2 / zoomLevel;
+       ctx.setLineDash([5/zoomLevel, 5/zoomLevel]);
+       ctx.strokeRect(-el.width/2, -el.height/2, el.width, el.height);
+       
+       // Handles
+       ctx.fillStyle = '#fff';
+       ctx.setLineDash([]);
+       const hw = 6 / zoomLevel;
+       const positions = [
+         [-el.width/2, -el.height/2], [0, -el.height/2], [el.width/2, -el.height/2],
+         [-el.width/2, 0],                            [el.width/2, 0],
+         [-el.width/2, el.height/2],  [0, el.height/2],  [el.width/2, el.height/2]
+       ];
+       
+       positions.forEach(p => {
+         ctx.fillRect(p[0]-hw, p[1]-hw, hw*2, hw*2);
+         ctx.strokeRect(p[0]-hw, p[1]-hw, hw*2, hw*2);
+       });
+       
+       // Rotation handle
+       ctx.beginPath();
+       ctx.moveTo(0, -el.height/2);
+       ctx.lineTo(0, -el.height/2 - 30/zoomLevel);
+       ctx.stroke();
+       ctx.beginPath();
+       ctx.arc(0, -el.height/2 - 30/zoomLevel, hw, 0, Math.PI*2);
+       ctx.fill();
+       ctx.stroke();
+       
+       ctx.restore();
+    }
+
+    render();
+
+    // === ACTIONS ===
+    function loadBackgroundImage(e) {
+      const file = e.target.files[0];
+      if(!file) return;
+      if(db.bgImage) {
+        if(!confirm("Substituir a imagem de fundo atual?")) return;
+      }
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        const img = new Image();
+        img.onload = () => {
+          db.width = img.width;
+          db.height = img.height;
+          canvas.width = db.width;
+          canvas.height = db.height;
+          db.bgImage = { src: evt.target.result, imgElement: img };
+          db.filters = { brightness: 0, contrast: 0, saturate: 0, hue: 0, blur: 0, sepia: 0 };
+          saveState();
+          resetFilterUI();
+        }
+        img.src = evt.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function addLogo(e) {
+      const file = e.target.files[0];
+      if(!file) return;
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        const img = new Image();
+        img.onload = () => {
+          const ratio = img.height / img.width;
+          db.elements.push({
+            id: 'el_'+Date.now(),
+            name: 'Logo',
+            type: 'image',
+            src: evt.target.result,
+            imgElement: img,
+            x: db.width/2 - 100,
+            y: db.height/2 - (100*ratio),
+            width: 200,
+            height: 200 * ratio,
+            rotation: 0,
+            opacity: 100,
+            blendMode: 'source-over',
+            shadow: { active:false, color:'#000000', blur:10, offsetX:5, offsetY:5 }
+          });
+          selectedId = db.elements[db.elements.length-1].id;
+          saveState();
+          updatePropertiesPanel();
+        }
+        img.src = evt.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function addText() {
+      db.elements.push({
+        id: 'el_'+Date.now(),
+        name: 'Texto',
+        type: 'text',
+        text: 'Duplo clique para editar',
+        fontFamily: 'Roboto',
+        fontSize: 60,
+        color: '#ffffff',
+        bold: false,
+        italic: false,
+        align: 'center',
+        x: db.width/2 - 250,
+        y: db.height/2 - 50,
+        width: 500,
+        height: 100,
+        rotation: 0,
+        opacity: 100,
+        bgActive: false,
+        bgColor: '#000000',
+        shadow: { active:false, color:'#000000', blur:10, offsetX:5, offsetY:5 }
+      });
+      selectedId = db.elements[db.elements.length-1].id;
+      saveState();
+      updatePropertiesPanel();
+    }
+
+    function addShape(type) {
+      db.elements.push({
+        id: 'el_'+Date.now(),
+        name: type === 'rectangle' ? 'Retângulo' : 'Círculo',
+        type: 'shape',
+        shapeType: type,
+        fill: '#FFB800',
+        stroke: '#000000',
+        strokeWidth: 0,
+        x: db.width/2 - 100,
+        y: db.height/2 - 100,
+        width: 200,
+        height: 200,
+        rotation: 0,
+        opacity: 100,
+        shadow: { active:false, color:'#000000', blur:10, offsetX:5, offsetY:5 }
+      });
+      selectedId = db.elements[db.elements.length-1].id;
+      saveState();
+      updatePropertiesPanel();
+    }
+
+    function removeElement(id) {
+      db.elements = db.elements.filter(e => e.id !== id);
+      if(selectedId === id) selectedId = null;
+      saveState();
+      updatePropertiesPanel();
+    }
+
+    function duplicateElement(id) {
+      const el = db.elements.find(e => e.id === id);
+      if(!el) return;
+      const copy = JSON.parse(JSON.stringify(el));
+      copy.id = 'el_'+Date.now();
+      copy.x += 20; copy.y += 20;
+      if(copy.type === 'image') copy.imgElement = el.imgElement; // Keep ref
+      db.elements.push(copy);
+      selectedId = copy.id;
+      saveState();
+      updatePropertiesPanel();
+    }
+
+    // === MOUSE INTERACTIONS ===
+    canvas.addEventListener('mousedown', e => {
+       const rect = canvas.getBoundingClientRect();
+       const mx = (e.clientX - rect.left) / zoomLevel;
+       const my = (e.clientY - rect.top) / zoomLevel;
+
+       // Search hits backwards (top layer first)
+       let hit = null;
+       // We should ideally calculate transforms for proper hit testing
+       // For MVP, simple bounding box test without rotation taken into account intensely
+       for(let i=db.elements.length-1; i>=0; i--) {
+         let el = db.elements[i];
+         // Very basic hit test ignores rotation for selection picking logic to save complexity
+         if(mx >= el.x && mx <= el.x + el.width && my >= el.y && my <= el.y + el.height) {
+            hit = el; break;
+         }
+       }
+       
+       if(hit) {
+         selectedId = hit.id;
+         isDragging = true;
+         dragStartX = mx; dragStartY=my;
+         originalElemState = { x: hit.x, y: hit.y };
+       } else {
+         selectedId = null;
+       }
+       updatePropertiesPanel();
+    });
+
+    canvas.addEventListener('mousemove', e => {
+      if(!isDragging || !selectedId) return;
+      const rect = canvas.getBoundingClientRect();
+      const mx = (e.clientX - rect.left) / zoomLevel;
+      const my = (e.clientY - rect.top) / zoomLevel;
+      
+      const el = db.elements.find(e => e.id === selectedId);
+      if(el) {
+        el.x = originalElemState.x + (mx - dragStartX);
+        el.y = originalElemState.y + (my - dragStartY);
+      }
+    });
+
+    canvas.addEventListener('mouseup', () => {
+      if(isDragging) {
+         isDragging = false;
+         saveState();
+      }
+    });
+
+    canvas.addEventListener('dblclick', e => {
+       if(selectedId) {
+         const el = db.elements.find(e => e.id === selectedId);
+         if(el.type === 'text') {
+           const newText = prompt("Editar Texto:", el.text);
+           if(newText !== null) {
+              el.text = newText;
+              saveState();
+              updatePropertiesPanel();
+           }
+         }
+       }
+    });
+
+    // === UI & PANELS ===
+    function toggleExtPanel(panel) {
+      document.getElementById('extPanel').classList.add('open');
+      document.getElementById('panel-filters').classList.add('d-none');
+      document.getElementById('panel-layers').classList.add('d-none');
+      document.getElementById(`panel-${panel}`).classList.remove('d-none');
+      if(panel === 'layers') updateLayersPanel();
+    }
+    
+    function setZoom(z) { zoomLevel = z; }
+    function fitToScreen() {
+       const wrap = document.getElementById('canvasWrapper');
+       const padding = 40;
+       const scaleX = (wrap.clientWidth - padding) / db.width;
+       const scaleY = (wrap.clientHeight - padding) / db.height;
+       zoomLevel = Math.min(scaleX, scaleY, 1);
+    }
+
+    function updateFilters() {
+      db.filters.brightness = document.getElementById('filter-brightness').value;
+      db.filters.contrast = document.getElementById('filter-contrast').value;
+      db.filters.saturate = document.getElementById('filter-saturate').value;
+      db.filters.hue = document.getElementById('filter-hue').value;
+      db.filters.blur = document.getElementById('filter-blur').value;
+      db.filters.sepia = document.getElementById('filter-sepia').value;
+    }
+    
+    function resetFilters() {
+      db.filters = { brightness: 0, contrast: 0, saturate: 0, hue: 0, blur: 0, sepia: 0 };
+      resetFilterUI();
+    }
+
+    function resetFilterUI() {
+      document.getElementById('filter-brightness').value = db.filters.brightness;
+      document.getElementById('filter-contrast').value = db.filters.contrast;
+      document.getElementById('filter-saturate').value = db.filters.saturate;
+      document.getElementById('filter-hue').value = db.filters.hue;
+      document.getElementById('filter-blur').value = db.filters.blur;
+      document.getElementById('filter-sepia').value = db.filters.sepia;
+    }
+
+    function updateLayersPanel() {
+      const list = document.getElementById('layersList');
+      if(!list) return;
+      document.getElementById('layerCount').innerText = db.elements.length;
+      list.innerHTML = '';
+      [...db.elements].reverse().forEach((el, idx) => {
+        const div = document.createElement('div');
+        div.className = `layer-item ${selectedId === el.id ? 'selected' : ''}`;
+        div.innerHTML = `<span>${el.name || el.type}</span>`;
+        div.onclick = () => { selectedId = el.id; updatePropertiesPanel(); updateLayersPanel(); };
+        list.appendChild(div);
+      });
+    }
+
+    function updatePropertiesPanel() {
+      const p = document.getElementById('propertiesPanel');
+      const msg = document.getElementById('noSelectionMsg');
+      const content = document.getElementById('propContent');
+      
+      const el = db.elements.find(e => e.id === selectedId);
+      if(!el) {
+        msg.classList.remove('d-none');
+        content.classList.add('d-none');
+        return;
+      }
+      
+      msg.classList.add('d-none');
+      content.classList.remove('d-none');
+      
+      let html = `<div class="prop-group">
+        <label>Posição X e Y</label>
+        <div class="prop-row">
+          <input type="number" value="${Math.round(el.x)}" onchange="updateProp('x', this.value)">
+          <input type="number" value="${Math.round(el.y)}" onchange="updateProp('y', this.value)">
+        </div>
+        <label>Largura e Altura</label>
+        <div class="prop-row">
+          <input type="number" value="${Math.round(el.width)}" onchange="updateProp('width', this.value)">
+          <input type="number" value="${Math.round(el.height)}" onchange="updateProp('height', this.value)">
+        </div>
+        <label>Opacidade (%)</label>
+        <input type="range" min="0" max="100" value="${el.opacity}" onchange="updateProp('opacity', this.value); saveState();" oninput="updateProp('opacity', this.value)">
+      </div>`;
+
+      if(el.type === 'text') {
+        let fontOpts = FONTS.map(f => `<option value="${f}" ${el.fontFamily===f?'selected':''}>${f}</option>`).join('');
+        html += `<div class="prop-group">
+          <label>Fonte</label>
+          <select onchange="updateProp('fontFamily', this.value); saveState()">${fontOpts}</select>
+          <label>Tamanho pt</label>
+          <input type="number" value="${el.fontSize}" onchange="updateProp('fontSize', this.value); saveState()">
+          <label>Cor do Texto</label>
+          <input type="color" value="${el.color}" onchange="updateProp('color', this.value); saveState()">
+          <label>Alinhamento</label>
+          <select onchange="updateProp('align', this.value); saveState()">
+            <option value="left" ${el.align==='left'?'selected':''}>Esquerda</option>
+            <option value="center" ${el.align==='center'?'selected':''}>Centro</option>
+            <option value="right" ${el.align==='right'?'selected':''}>Direita</option>
+          </select>
+        </div>`;
+      }
+
+      if(el.type === 'shape') {
+        html += `<div class="prop-group">
+          <label>Cor de Preenchimento</label>
+          <input type="color" value="${el.fill}" onchange="updateProp('fill', this.value); saveState()">
+          <label>Espessura do Traço</label>
+          <input type="number" value="${el.strokeWidth || 0}" onchange="updateProp('strokeWidth', this.value); saveState()">
+          <label>Cor do Traço</label>
+          <input type="color" value="${el.stroke}" onchange="updateProp('stroke', this.value); saveState()">
+        </div>`;
+      }
+
+      html += `<div class="prop-group">
+        <button onclick="duplicateElement('${el.id}')" style="margin-bottom:5px;">Duplicar Camada</button>
+        <button onclick="removeElement('${el.id}')" style="background:#ef4444; color:white; border:none;">Remover Camada</button>
+      </div>`;
+
+      content.innerHTML = html;
+    }
+
+    function updateProp(key, value) {
+      const el = db.elements.find(e => e.id === selectedId);
+      if(el) {
+        if(['x','y','width','height','opacity','fontSize','strokeWidth'].includes(key)) {
+          el[key] = parseFloat(value);
+        } else {
+          el[key] = value;
+        }
+      }
+    }
+
+    // === EXPORT & SAVE ===
+    function saveProject() {
+      const name = document.getElementById('projectName').value || 'Conversio_Project';
+      // Purge DOM elements
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(db, (k,v) => k==='imgElement'?undefined:v));
+      const a = document.createElement('a');
+      a.setAttribute("href", dataStr);
+      a.setAttribute("download", name + ".json");
+      a.click();
+    }
+
+    function loadProject(e) {
+      const file = e.target.files[0];
+      if(!file) return;
+      const reader = new FileReader();
+      reader.onload = async (evt) => {
+        try {
+          await restoreState(evt.target.result);
+          saveState(); // Record into history
+        } catch(err) {
+          alert('Erro ao carregar o projeto. O arquivo JSON é inválido.');
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function exportImage() {
+      selectedId = null; // hide handles
+      render(); // force render without handles
+      setTimeout(() => {
+        const link = document.createElement('a');
+        const name = document.getElementById('projectName').value || 'Export';
+        link.download = `${name}_Conversio.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+      }, 100);
+    }
+
+    // Keybinds
+    window.addEventListener('keydown', e => {
+      if(e.ctrlKey && e.key === 'z') { e.preventDefault(); undo(); }
+      if((e.ctrlKey && e.key === 'y') || (e.ctrlKey && e.shiftKey && e.key === 'Z')) { e.preventDefault(); redo(); }
+      if(e.key === 'Delete' || e.key === 'Backspace') {
+          // Avoid deleting if typing in input
+          if(document.activeElement.tagName === 'INPUT') return;
+          if(selectedId) removeElement(selectedId);
+      }
+    });
+
+  </script>
+</body>
+</html>
