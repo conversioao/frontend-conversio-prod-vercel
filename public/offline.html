@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sem ligação — Conversio AI</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background: #050508;
+      color: #EDEDED;
+      text-align: center;
+      padding: 24px;
+    }
+    .logo {
+      width: 80px;
+      height: 80px;
+      border-radius: 20px;
+      margin-bottom: 24px;
+      background: #121212;
+      border: 1px solid rgba(255,255,255,0.08);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 36px;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 20px;
+      background: rgba(255,184,0,0.1);
+      border: 1px solid rgba(255,184,0,0.25);
+      color: #FFB800;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 20px;
+    }
+    h1 {
+      font-size: 22px;
+      font-weight: 800;
+      margin-bottom: 10px;
+      letter-spacing: -0.5px;
+    }
+    p {
+      font-size: 15px;
+      color: #888;
+      margin-bottom: 36px;
+      max-width: 280px;
+      line-height: 1.5;
+    }
+    button {
+      background: #FFB800;
+      color: #000;
+      border: none;
+      padding: 14px 32px;
+      border-radius: 14px;
+      font-size: 15px;
+      font-weight: 800;
+      cursor: pointer;
+      min-height: 48px;
+      letter-spacing: -0.3px;
+      transition: opacity 0.2s;
+    }
+    button:hover { opacity: 0.85; }
+    .hint {
+      margin-top: 24px;
+      font-size: 12px;
+      color: #444;
+    }
+  </style>
+</head>
+<body>
+  <div class="logo">📡</div>
+  <div class="badge">⚡ Conversio AI</div>
+  <h1>Sem ligação à internet</h1>
+  <p>Verifica a tua ligação e tenta novamente para continuar a criar anúncios.</p>
+  <button onclick="window.location.reload()">↺ &nbsp;Tentar novamente</button>
+  <p class="hint">O teu trabalho está guardado e estará disponível quando a ligação voltar.</p>
+</body>
+</html>
