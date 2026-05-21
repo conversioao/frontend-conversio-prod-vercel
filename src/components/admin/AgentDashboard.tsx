@@ -270,7 +270,7 @@ export function AgentDashboard({ onClose, onNavigate }: { onClose: () => void, o
         [slug]: { ...prev[slug], status: isActive ? 'paused' : 'active' }
       }));
       
-      await fetch(`${baseUrl}/api/agents/${slug}/toggle`, {
+      await fetch(`${baseUrl}/agents/${slug}/toggle`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ active: !isActive })
@@ -677,7 +677,7 @@ export function AgentDashboard({ onClose, onNavigate }: { onClose: () => void, o
                       onClick={async () => {
                         const token = localStorage.getItem('conversio_token');
                         try {
-                          const res = await fetch(`${baseUrl}/api/admin/agents/${selectedNode}/repair`, {
+                          const res = await fetch(`${baseUrl}/admin/agents/${selectedNode}/repair`, {
                             method: 'POST',
                             headers: { 'Authorization': `Bearer ${token}` }
                           });

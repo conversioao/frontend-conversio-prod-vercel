@@ -56,7 +56,7 @@ body {
     linear-gradient(90deg, var(--color-border-subtle) 1px, transparent 1px);
   background-size: 32px 32px;
   background-position: center top;
-  background-attachment: fixed;
+  /* NÃO usar background-attachment: fixed — força repaint em scroll em mobile/4G */
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
@@ -158,7 +158,7 @@ body {
     linear-gradient(90deg, var(--color-border-subtle) 1px, transparent 1px);
   background-size: 32px 32px;
   background-position: center top;
-  background-attachment: fixed;
+  /* SEM background-attachment: fixed — melhora scroll FPS em Android/iOS 4G */
   padding-top: env(safe-area-inset-top);
   padding-bottom: env(safe-area-inset-bottom);
 }
@@ -177,6 +177,7 @@ body {
     background-image:
       linear-gradient(var(--color-border-subtle) 1px, transparent 1px),
       linear-gradient(90deg, var(--color-border-subtle) 1px, transparent 1px);
+    /* SEM fixed — performance em scroll mobile */
   }
   /* Esconde qualquer elemento só para browser */
   .browser-only { display: none !important; }

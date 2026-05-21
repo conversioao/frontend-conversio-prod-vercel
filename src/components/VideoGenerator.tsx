@@ -14,8 +14,15 @@ import { useMobile } from '../hooks/useMobile';
 import { ProductCamera } from './ui/ProductCamera';
 import { getUserPlan, PLANS } from '../utils/planUtils';
 
-const VIDEO_CORES = [
-  { id: 'ugc-video', name: 'UGC Autêntico', agentTechnicalId: 'ugc-video', icon: Smartphone, description: 'Criador UGC autêntico a mostrar e falar do produto. Diversidade premium.', credit_cost: 15 },
+const VIDEO_CORES: any[] = [
+  { id: 'ugc-smart-selector', name: '✨ Seletor Inteligente UGC', agentTechnicalId: 'ugc-smart-selector', icon: Sparkles, description: 'Orquestrador inteligente. Analisa a foto do produto e escolhe automaticamente o melhor estilo UGC para o produto.', credit_cost: 15 },
+  { id: 'ugc-talking-head', name: '🗣️ Criador em Destaque (Selfie)', agentTechnicalId: 'ugc-talking-head', icon: Smartphone, description: 'Criador/a angolano/a a falar diretamente para a câmara (selfie). Autêntico, sem cortes, e com o produto na mão (escala real).', credit_cost: 15 },
+  { id: 'ugc-product-demo', name: '🚀 Demonstração de Produto', agentTechnicalId: 'ugc-product-demo', icon: Zap, description: 'Demonstração ativa do produto em uso real num ambiente angolano moderno. Foco no processo de uso sem cortes.', credit_cost: 15 },
+  { id: 'ugc-before-after', name: '🔄 Antes & Depois', agentTechnicalId: 'ugc-before-after', icon: TrendingUp, description: 'Demonstração da transformação real e orgânica: antes do produto vs depois com o produto.', credit_cost: 15 },
+  { id: 'ugc-unboxing', name: '📦 Abertura de Embalagem (Unboxing)', agentTechnicalId: 'ugc-unboxing', icon: Package, description: 'Processo de abrir a embalagem e revelação gradual do produto com reação entusiasmada.', credit_cost: 15 },
+  { id: 'ugc-pov', name: '👁️ POV (Primeira Pessoa)', agentTechnicalId: 'ugc-pov', icon: Camera, description: 'Câmara representa os seus olhos (primeira pessoa) a interagir com o produto em Luanda. Super imersivo.', credit_cost: 15 },
+  { id: 'ugc-friend-recommendation', name: '🤝 Recomendação de Amigo', agentTechnicalId: 'ugc-friend-recommendation', icon: Users, description: 'Recomendação super casual e espontânea para um amigo, simulando mensagem de vídeo de WhatsApp.', credit_cost: 15 },
+  { id: 'ugc-reaction-story', name: '🎭 História & Reação', agentTechnicalId: 'ugc-reaction-story', icon: MessagesSquare, description: 'Começa com uma frustração do dia-a-dia luandense e revela o produto como solução na segunda metade.', credit_cost: 15 }
 ];
 
 const RATIOS = [
@@ -52,6 +59,12 @@ export function VideoGenerator({ initialCore, onClearCore, onProgressUpdate }: V
   const [showToast, setShowToast] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmModalConfig, setConfirmModalConfig] = useState<any>({ title: '', message: '', onConfirm: () => {} });
+
+  // ─── PROMPT PREVIEW (Botão de Teste) ──────────────────────────────────────
+  const [showPromptModal, setShowPromptModal] = useState(false);
+  const [previewPrompt, setPreviewPrompt] = useState<any>(null);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [promptCopied, setPromptCopied] = useState(false);
   
   // UI States
   const [showWizardModal, setShowWizardModal] = useState(false);
@@ -98,6 +111,133 @@ export function VideoGenerator({ initialCore, onClearCore, onProgressUpdate }: V
       setUploadedFile(file);
       setUploadedImage(URL.createObjectURL(file));
       setCapturedFile(null);
+    }
+  };
+
+  // ─── HANDLER: Dry-run para preview do prompt que seria enviado ao Kie.ai ───
+  const handlePromptPreview = async () => {
+    if (!uploadedImage && !prompt.trim()) {
+      setConfirmModalConfig({
+        title: 'Dados em Falta',
+        message: 'Carrega uma imagem do produto e/ou escreve uma descrição para simular o prompt.',
+        type: 'warning',
+        onConfirm: () => setShowConfirmModal(false)
+      });
+      setShowConfirmModal(true);
+      return;
+    }
+
+    setIsPreviewLoading(true);
+    setPreviewPrompt(null);
+    setShowPromptModal(true);
+
+    try {
+      const formData = new FormData();
+      formData.append('userPrompt', prompt);
+      formData.append('prompt', prompt);
+      formData.append('model_name', selectedModel?.name || 'Veo 3');
+      formData.append('model_id', selectedModel?.id || '');
+      formData.append('core_id', selectedCore?.agentTechnicalId || 'ugc-daily-action');
+      formData.append('core_model', selectedCore?.agentTechnicalId || '');
+      formData.append('core_name', selectedCore?.name || '');
+      formData.append('aspectRatio', ratio);
+      formData.append('quantity', '1');
+      formData.append('mode', 'video');
+      formData.append('dry_run', 'true'); // Sinaliza ao backend para NÃO gerar, apenas retornar o prompt
+      formData.append('userId', user.id || 'preview-test');
+
+      if (uploadedFile) {
+        formData.append('image', uploadedFile);
+      } else if (capturedFile) {
+        formData.append('image', capturedFile);
+      } else if (uploadedImage && uploadedImage.startsWith('http')) {
+        formData.append('referenceImageUrl', uploadedImage);
+      }
+
+      const res = await apiFetch('/generate/video/preview', { method: 'POST', body: formData });
+      const data = await res.json();
+
+      if (data.success && data.prompt) {
+        setPreviewPrompt(data.prompt);
+      } else {
+        // Fallback: mostrar o prompt simulado localmente com os dados disponíveis
+        setPreviewPrompt(buildLocalPromptPreview());
+      }
+    } catch (err) {
+      // Se o endpoint de preview não existir ainda, simula localmente
+      setPreviewPrompt(buildLocalPromptPreview());
+    } finally {
+      setIsPreviewLoading(false);
+    }
+  };
+
+  // Constrói uma simulação local do prompt para preview se o endpoint não existir
+  const buildLocalPromptPreview = () => {
+    const agentName = selectedCore?.name || 'UGC Agente';
+    const agentId = selectedCore?.agentTechnicalId || 'ugc-daily-action';
+    const now = new Date().toISOString();
+    return {
+      _meta: {
+        agent_id: agentId,
+        agent_name: agentName,
+        model: selectedModel?.name || 'Veo 3',
+        aspect_ratio: ratio,
+        duration: '8 segundos',
+        simulated_at: now,
+        note: 'Este é um preview simulado localmente. O prompt real é gerado pelo backend com análise GPT-4o da imagem do produto.'
+      },
+      video_prompt: {
+        agent_id: agentId,
+        agent_style: agentName,
+        product_reference: {
+          name: '[Nome do produto será extraído da imagem pelo GPT-4o]',
+          visual_description: '[Descrição visual 100% fiel extraída pelo GPT-4o Vision da imagem carregada]',
+          scale_note: 'CRITICAL: Manter escala real 1:1. Produto na mão do criador em todo o vídeo.',
+          consistency_note: 'O produto no vídeo DEVE ser idêntico à imagem de referência fornecida.'
+        },
+        talent: {
+          description: 'Criador/a Black Angolano/a, tom de pele escuro a castanho-rico, cabelo natural afro / tranças / twists, roupa casual moderna de Luanda.',
+          casting_note: 'OBRIGATÓRIO: Elenco Black Angolano/a. Estética urbana de Luanda.',
+          energy: 'Caloroso, autêntico, relatable — como gravar um WhatsApp Status para amigos'
+        },
+        setting: {
+          location: '[Cenário da casa de Luanda autêntico e perfeitamente adaptado ao produto analisado pelo GPT-4o]',
+          angolan_authenticity_cues: 'Elementos visuais angolanos: decoração moderna, madeira natural, tons quentes de Luanda'
+        },
+        camera: {
+          style: 'POV Smartphone, vertical 9:16, 4K HD, handheld selfie',
+          shots: [
+            'Shot 1 — HOOK (00:00–00:03): Criador segura o produto perto da lente. Gancho inicial em PT-AO.',
+            'Shot 2 — BENEFÍCIO (00:03–00:06): Demonstração do produto em uso real no cenário angolano.',
+            'Shot 3 — CTA (00:06–00:08): Sorriso caloroso, produto visível, CTA em PT-AO. Fim suave sem corte.'
+          ],
+          ending_rule: 'CRÍTICO: O vídeo termina de forma natural e suave. SEM corte abrupto. SEM tela preta súbita.'
+        },
+        audio: {
+          voice_language: 'INSTRUÇÃO CRÍTICA PARA VEO 3: Gerar áudio de voz em 100% Português de Angola (pt-AO) com sotaque nativo de Luanda. NÃO Português do Brasil. NÃO Português de Portugal.',
+          voice_tone: 'Caloroso, rápido, conversacional e autêntico — como um amigo de Luanda a partilhar uma recomendação',
+          music: 'Afrobeat subtil ou Afro-house suave de fundo (volume baixo, sem dominar a voz)'
+        },
+        narration_script: {
+          shot_1_hook: `[Gancho de 3s em PT-AO gerado pelo GPT-4o com base no produto: "${prompt || 'produto a ser analisado'}"]`,
+          shot_2_benefit: '[Benefício de 3s em PT-AO gerado pelo GPT-4o com base na análise do produto]',
+          shot_3_cta: '[CTA de 2s em PT-AO gerado pelo GPT-4o — casual e angolano]'
+        },
+        duration_seconds: 8,
+        aspect_ratio: ratio,
+        format: agentName,
+        pacing: 'Rápido, autêntico, estilo redes sociais angolanas'
+      },
+      copy: '[Legenda persuasiva em PT-AO gerada pelo GPT-4o com gancho, benefícios e CTA angolano]',
+      hashtags: '#Angola #Luanda #MarketingAngola #ConversioAI + hashtags específicas do produto'
+    };
+  };
+
+  const handleCopyPrompt = () => {
+    if (previewPrompt) {
+      navigator.clipboard.writeText(JSON.stringify(previewPrompt, null, 2));
+      setPromptCopied(true);
+      setTimeout(() => setPromptCopied(false), 2500);
     }
   };
 
@@ -180,7 +320,7 @@ export function VideoGenerator({ initialCore, onClearCore, onProgressUpdate }: V
     setSseProgress({ percent: 0, label: 'A iniciar pipeline...', elapsed: 0 });
     elapsedRef.current = setInterval(() => { elapsed++; setSseProgress(prev => prev ? { ...prev, elapsed } : null); }, 1000);
 
-    const apiBase = (import.meta.env.VITE_API_URL || 'http://localhost:3003');
+    const apiBase = (import.meta.env.VITE_API_URL || 'https://conversioai-conversio-ai-backend.odbegs.easypanel.host');
     const es = new EventSource(`${apiBase}/api/generations/progress/${batchId}`);
     sseRef.current = es;
 
@@ -232,75 +372,113 @@ export function VideoGenerator({ initialCore, onClearCore, onProgressUpdate }: V
             )}
           </div>
           
-          <div className="max-w-md mx-auto relative px-4 sm:px-0">
-            <div className="grid grid-cols-1 gap-8">
+          <div className={`relative px-4 sm:px-0 transition-all ${
+            (generatedItems.length === 1 || (generatedItems.length === 0 && quantity === 1)) 
+              ? 'max-w-md mx-auto' 
+              : 'max-w-5xl mx-auto'
+          }`}>
+            <div className={`grid gap-8 ${
+              (generatedItems.length === 1 || (generatedItems.length === 0 && quantity === 1)) 
+                ? 'grid-cols-1' 
+                : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3'
+            }`}>
                 {(generatedItems.length > 0 ? generatedItems : Array.from({ length: quantity })).map((item, idx) => (
-                    <div key={item?.id || `placeholder-${idx}`} className="rounded-[2.5rem] overflow-hidden shadow-[0_40px_80px_rgba(0,0,0,0.5)] border border-white/10 relative group/result aspect-[9/16] bg-surface">
-                        {!item || item.status === 'processing' ? (
-                            <div className="absolute inset-0 flex flex-col items-center justify-center gap-8 p-10 bg-surface/80 backdrop-blur-md animate-pulse-glow">
-                                {/* Centered Percentage and Yellow Spinner */}
-                                <div className="relative flex items-center justify-center w-28 h-28">
-                                    <div className="absolute inset-0 rounded-full border-4 border-[#FFB800]/5" />
-                                    <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-[#FFB800] animate-spin shadow-[0_0_20px_rgba(255,184,0,0.3)]" />
-                                    
-                                    <div className="flex flex-col items-center justify-center">
-                                        <span className="text-2xl font-black text-[#FFB800] drop-shadow-[0_0_10px_rgba(255,184,0,0.4)]">
-                                            {Math.round(sseProgress?.percent || 0)}%
-                                        </span>
+                    <div key={item?.id || `placeholder-${idx}`} className="flex flex-col gap-4">
+                        <div className="rounded-[2.5rem] overflow-hidden shadow-[0_40px_80px_rgba(0,0,0,0.5)] border border-white/10 relative group/result aspect-[9/16] bg-surface shrink-0">
+                            {!item || item.status === 'processing' ? (
+                                <div className="absolute inset-0 flex flex-col items-center justify-center gap-8 p-10 bg-surface/80 backdrop-blur-md animate-pulse-glow">
+                                    {/* Centered Percentage and Yellow Spinner */}
+                                    <div className="relative flex items-center justify-center w-28 h-28">
+                                        <div className="absolute inset-0 rounded-full border-4 border-[#FFB800]/5" />
+                                        <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-[#FFB800] animate-spin shadow-[0_0_20px_rgba(255,184,0,0.3)]" />
+                                        
+                                        <div className="flex flex-col items-center justify-center">
+                                            <span className="text-2xl font-black text-[#FFB800] drop-shadow-[0_0_10px_rgba(255,184,0,0.4)]">
+                                                {Math.round(sseProgress?.percent || 0)}%
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div className="text-center space-y-2">
+                                        <p className="text-lg font-black text-text-primary tracking-tight">
+                                            {sseProgress?.label || 'A Iniciar Produção...'}
+                                        </p>
+                                        <p className="text-[10px] text-[#FFB800] font-black uppercase tracking-[0.3em] opacity-80">
+                                            {idx + 1} de {quantity} • Vídeo Premium
+                                        </p>
+                                    </div>
+                                    <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-white/5">
+                                        <div 
+                                            className="h-full bg-[#FFB800] transition-all duration-700 shadow-[0_0_20px_rgba(255,184,0,0.4)]" 
+                                            style={{ width: `${sseProgress?.percent || 0}%` }} 
+                                        />
                                     </div>
                                 </div>
-                                <div className="text-center space-y-2">
-                                    <p className="text-lg font-black text-text-primary tracking-tight">
-                                        {sseProgress?.label || 'A Iniciar Produção...'}
-                                    </p>
-                                    <p className="text-[10px] text-[#FFB800] font-black uppercase tracking-[0.3em] opacity-80">
-                                        {idx + 1} de {quantity} • Vídeo Premium
-                                    </p>
-                                </div>
-                                <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-white/5">
-                                    <div 
-                                        className="h-full bg-[#FFB800] transition-all duration-700 shadow-[0_0_20px_rgba(255,184,0,0.4)]" 
-                                        style={{ width: `${sseProgress?.percent || 0}%` }} 
+                            ) : item.status === 'completed' ? (
+                                <>
+                                    <video 
+                                        src={item.result_url} 
+                                        className="w-full h-full object-cover"
+                                        controls
+                                        autoPlay={idx === 0}
+                                        loop
+                                        muted
                                     />
-                                </div>
-                            </div>
-                        ) : item.status === 'completed' ? (
-                            <>
-                                <video 
-                                    src={item.result_url} 
-                                    className="w-full h-full object-cover"
-                                    controls
-                                    autoPlay={idx === 0}
-                                    loop
-                                    muted
-                                />
-                                <div className="absolute top-6 right-6 flex flex-col gap-3 opacity-0 group-hover/result:opacity-100 transition-opacity translate-x-4 group-hover/result:translate-x-0 group-hover/result:duration-500">
-                                    <a href={item.result_url} download className="p-4 rounded-2xl bg-[#FFB800] text-black hover:scale-110 transition-all shadow-2xl">
-                                        <Download size={22} />
-                                    </a>
-                                </div>
-                                <div className="absolute top-6 left-6">
-                                    <div className="px-4 py-2 rounded-2xl bg-black/60 backdrop-blur-md border border-white/10 text-[10px] font-black text-white uppercase tracking-widest flex items-center gap-2">
-                                        <Play size={10} className="text-[#FFB800]" fill="#FFB800" />
-                                        Conversio Video
+                                    <div className="absolute top-6 right-6 flex flex-col gap-3 opacity-0 group-hover/result:opacity-100 transition-opacity translate-x-4 group-hover/result:translate-x-0 group-hover/result:duration-500">
+                                        <a href={item.result_url} download className="p-4 rounded-2xl bg-[#FFB800] text-black hover:scale-110 transition-all shadow-2xl">
+                                            <Download size={22} />
+                                        </a>
                                     </div>
+                                    <div className="absolute top-6 left-6">
+                                        <div className="px-4 py-2 rounded-2xl bg-black/60 backdrop-blur-md border border-white/10 text-[10px] font-black text-white uppercase tracking-widest flex items-center gap-2">
+                                            <Play size={10} className="text-[#FFB800]" fill="#FFB800" />
+                                            Conversio Video
+                                        </div>
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="absolute inset-0 flex flex-col items-center justify-center bg-red-500/5 gap-6 p-10 text-center">
+                                    <AlertCircle size={48} className="text-red-500/50" />
+                                    <div>
+                                        <p className="text-xl font-black text-white uppercase tracking-widest mb-2">Falha na Produção</p>
+                                        <p className="text-xs text-text-tertiary leading-relaxed px-4">
+                                            {item.metadata?.error || 'Ocorreu um erro ao processar o vídeo. Os teus créditos foram devolvidos.'}
+                                        </p>
+                                    </div>
+                                    <button 
+                                        onClick={() => setStatus('idle')}
+                                        className="mt-4 px-8 py-3 rounded-2xl bg-white/5 border border-white/10 text-[10px] font-black uppercase tracking-[0.2em] hover:bg-white/10 transition-all"
+                                    >
+                                        Tentar Novamente
+                                    </button>
                                 </div>
-                            </>
-                        ) : (
-                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-red-500/5 gap-6 p-10 text-center">
-                                <AlertCircle size={48} className="text-red-500/50" />
-                                <div>
-                                    <p className="text-xl font-black text-white uppercase tracking-widest mb-2">Falha na Produção</p>
-                                    <p className="text-xs text-text-tertiary leading-relaxed px-4">
-                                        {item.metadata?.error || 'Ocorreu um erro ao processar o vídeo. Os teus créditos foram devolvidos.'}
+                            )}
+                        </div>
+
+                        {/* Copy & Hashtags Display */}
+                        {item?.status === 'completed' && (item.copy || item.hashtags) && (
+                            <div className="p-6 rounded-[2rem] bg-surface/50 backdrop-blur-md border border-white/5 shadow-xl animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                <div className="flex items-center gap-2 mb-4 text-[#FFB800]">
+                                    <MessagesSquare size={16} />
+                                    <span className="text-[10px] font-black uppercase tracking-[0.2em]">Copywriting Gerado</span>
+                                </div>
+                                {item.copy && (
+                                    <p className="text-sm text-text-secondary leading-relaxed whitespace-pre-wrap mb-4 font-medium">
+                                        {item.copy}
                                     </p>
+                                )}
+                                {item.hashtags && (
+                                    <p className="text-xs text-[#FFB800] font-medium leading-relaxed">
+                                        {item.hashtags}
+                                    </p>
+                                )}
+                                <div className="mt-4 pt-4 border-t border-white/5 flex justify-end">
+                                    <button 
+                                        onClick={() => navigator.clipboard.writeText(`${item.copy || ''}\n\n${item.hashtags || ''}`)}
+                                        className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-bold text-white transition-all flex items-center gap-2 border border-white/5"
+                                    >
+                                        <Copy size={14} /> Copiar Texto
+                                    </button>
                                 </div>
-                                <button 
-                                    onClick={() => setStatus('idle')}
-                                    className="mt-4 px-8 py-3 rounded-2xl bg-white/5 border border-white/10 text-[10px] font-black uppercase tracking-[0.2em] hover:bg-white/10 transition-all"
-                                >
-                                    Tentar Novamente
-                                </button>
                             </div>
                         )}
                     </div>
@@ -395,7 +573,7 @@ export function VideoGenerator({ initialCore, onClearCore, onProgressUpdate }: V
                     </button>
                   </div>
 
-                 <div className="flex flex-col items-end gap-1">
+                 <div className="flex flex-col items-end gap-2">
                     <button 
                       onClick={handleGenerate}
                       disabled={status === 'generating' || (!uploadedImage && !prompt.trim())}
@@ -577,6 +755,125 @@ export function VideoGenerator({ initialCore, onClearCore, onProgressUpdate }: V
                     <p className="text-[10px] text-text-secondary font-bold opacity-60">As tuas criações estão a ser forjadas.</p>
                 </div>
             </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          MODAL: PREVIEW DO PROMPT (BOTÃO TESTAR PROMPT — TEMPORÁRIO)
+      ══════════════════════════════════════════════════════════════════════ */}
+      {showPromptModal && (
+        <div
+          className="fixed inset-0 z-[500] flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl animate-in fade-in duration-300"
+          onClick={() => setShowPromptModal(false)}
+        >
+          <div
+            className="relative w-full max-w-4xl max-h-[90vh] flex flex-col bg-[#080808] border border-[#FFB800]/20 rounded-[2.5rem] shadow-[0_0_120px_rgba(255,184,0,0.08)] overflow-hidden animate-in zoom-in-95 duration-300"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-8 pt-7 pb-5 border-b border-white/5 shrink-0">
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 rounded-xl bg-[#FFB800]/10 border border-[#FFB800]/30 flex items-center justify-center">
+                  <Zap size={18} className="text-[#FFB800]" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-white tracking-tight">Preview do Prompt — <span className="text-[#FFB800]">{selectedCore?.name || 'Agente UGC'}</span></h3>
+                  <p className="text-[10px] text-text-tertiary font-bold uppercase tracking-[0.2em] mt-0.5">Prompt exato que seria enviado ao Kie.ai / Veo 3</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleCopyPrompt}
+                  disabled={!previewPrompt}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#FFB800] text-black text-[11px] font-black uppercase tracking-widest hover:scale-105 transition-all disabled:opacity-30 shadow-lg"
+                >
+                  {promptCopied ? <><CheckCircle2 size={14} /> Copiado!</> : <><Copy size={14} /> Copiar JSON</>}
+                </button>
+                <button onClick={() => setShowPromptModal(false)} className="p-2.5 rounded-xl bg-white/5 text-text-tertiary hover:text-white transition-all border border-white/10">
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+
+            {/* Badges de info */}
+            <div className="flex items-center gap-2 px-8 py-3 bg-black/20 shrink-0 border-b border-white/5 flex-wrap">
+              <span className="px-3 py-1 rounded-full bg-[#FFB800]/10 border border-[#FFB800]/20 text-[#FFB800] text-[10px] font-black uppercase tracking-widest">
+                {selectedCore?.agentTechnicalId || 'ugc-kitchen-home'}
+              </span>
+              <span className="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-text-secondary text-[10px] font-black uppercase tracking-widest">
+                {selectedModel?.name || 'Veo 3'}
+              </span>
+              <span className="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-text-secondary text-[10px] font-black uppercase tracking-widest">
+                {ratio} • 8s
+              </span>
+              <span className="px-3 py-1 rounded-full bg-green-500/10 border border-green-500/20 text-green-400 text-[10px] font-black uppercase tracking-widest">
+                ✓ PT-AO Angola
+              </span>
+              <span className="ml-auto text-[10px] text-text-tertiary font-bold">
+                🔧 Modo Teste — Sem consumo de créditos
+              </span>
+            </div>
+
+            {/* Body — JSON preview */}
+            <div className="flex-1 overflow-y-auto custom-scrollbar">
+              {isPreviewLoading ? (
+                <div className="flex flex-col items-center justify-center h-64 gap-6">
+                  <div className="relative">
+                    <div className="w-16 h-16 rounded-full border-2 border-[#FFB800]/10" />
+                    <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-[#FFB800] animate-spin" />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm font-black text-white uppercase tracking-widest">A Simular Pipeline...</p>
+                    <p className="text-[10px] text-text-tertiary mt-1">GPT-4o está a analisar a imagem e a construir o prompt</p>
+                  </div>
+                </div>
+              ) : previewPrompt ? (
+                <div className="p-6">
+                  {/* _meta info block */}
+                  {previewPrompt._meta && (
+                    <div className="mb-4 p-4 rounded-2xl bg-[#FFB800]/5 border border-[#FFB800]/15">
+                      <p className="text-[10px] font-black text-[#FFB800] uppercase tracking-widest mb-2">ℹ️ Informação da Simulação</p>
+                      <p className="text-xs text-text-secondary leading-relaxed">{previewPrompt._meta.note}</p>
+                    </div>
+                  )}
+                  {/* Final Prompt Highlight */}
+                  {previewPrompt.final_veo3_prompt && (
+                    <div className="mb-4 p-5 rounded-2xl bg-[#FFB800]/10 border border-[#FFB800]/30 shadow-[0_0_20px_rgba(255,184,0,0.1)]">
+                      <p className="text-[10px] font-black text-[#FFB800] uppercase tracking-widest mb-3 flex items-center gap-2">
+                        <Zap size={14} /> Prompt Final para Veo 3
+                      </p>
+                      <p className="text-sm font-medium text-white leading-relaxed whitespace-pre-wrap">
+                        {previewPrompt.final_veo3_prompt}
+                      </p>
+                    </div>
+                  )}
+                  <p className="text-[10px] font-black text-text-tertiary uppercase tracking-widest mb-2 mt-6">JSON Bruto Retornado</p>
+                  <pre className="text-xs text-green-300/90 leading-relaxed whitespace-pre-wrap break-words font-mono bg-black/40 rounded-2xl p-6 border border-white/5 overflow-x-auto">
+                    {JSON.stringify(previewPrompt, null, 2)}
+                  </pre>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-64 gap-4 text-center opacity-40">
+                  <AlertCircle size={40} className="text-red-400" />
+                  <p className="text-sm font-black text-white uppercase">Não foi possível gerar o preview</p>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="shrink-0 px-8 py-4 border-t border-white/5 bg-black/30 flex items-center justify-between">
+              <p className="text-[10px] text-text-tertiary">
+                💡 Copia este JSON e cola diretamente no painel do <strong className="text-text-secondary">Kie.ai</strong> para testar manualmente.
+              </p>
+              <button
+                onClick={handleCopyPrompt}
+                disabled={!previewPrompt}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#FFB800]/10 border border-[#FFB800]/30 text-[#FFB800] text-[11px] font-black uppercase tracking-widest hover:bg-[#FFB800]/20 transition-all disabled:opacity-30"
+              >
+                {promptCopied ? <><CheckCircle2 size={13} /> Copiado!</> : <><Copy size={13} /> Copiar Prompt</>}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

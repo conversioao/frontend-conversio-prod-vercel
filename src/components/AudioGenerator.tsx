@@ -176,7 +176,7 @@ export function AudioGenerator() {
       setSseProgress(prev => prev ? { ...prev, elapsed } : null);
     }, 1000);
 
-    const apiBase = (import.meta.env.VITE_API_URL || 'http://localhost:3003');
+    const apiBase = (import.meta.env.VITE_API_URL || 'https://conversioai-conversio-ai-backend.odbegs.easypanel.host');
     const es = new EventSource(`${apiBase}/api/generations/progress/${batchId}`);
     sseRef.current = es;
 

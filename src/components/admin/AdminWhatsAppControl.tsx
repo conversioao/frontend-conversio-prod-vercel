@@ -15,8 +15,10 @@ interface SystemAgent {
   phone_number: string;
   status: string;
   daily_limit: number;
+  health_score: number;
   api_key?: string;
-  whatsappState?: 'open' | 'close' | 'connecting' | 'unknown';
+  whatsapp_state?: 'open' | 'close' | 'connecting' | 'unknown' | 'not_found' | 'error';
+  whatsappState?: 'open' | 'close' | 'connecting' | 'unknown' | 'not_found' | 'error';
   loading?: boolean;
 }
 
@@ -76,7 +78,11 @@ export default function AdminWhatsAppControl() {
           if (b.slug === 'venda') return 1;
           return a.name.localeCompare(b.name);
         });
-        setAgents(sorted.map(a => ({ ...a, whatsappState: 'unknown', loading: true })));
+        setAgents(sorted.map(a => ({ 
+          ...a, 
+          whatsappState: a.whatsapp_state || 'unknown', 
+          loading: true 
+        })));
         // Fetch status for each agent
         sorted.forEach(agent => {
           if (agent.instance_name) fetchAgentStatus(agent.instance_name, agent.slug);
@@ -239,6 +245,13 @@ export default function AdminWhatsAppControl() {
             <p className={`text-[10px] font-black mt-1 ${selectedSlug === agent.slug ? 'text-black' : STATE_COLOR[agent.whatsappState || 'unknown']}`}>
               {agent.loading ? '...' : STATE_LABEL[agent.whatsappState || 'unknown']}
             </p>
+            {/* Health Bar Mini */}
+            <div className="mt-2 w-full h-1 bg-black/10 rounded-full overflow-hidden">
+              <div 
+                className={`h-full transition-all duration-500 ${agent.health_score > 80 ? 'bg-emerald-400' : agent.health_score > 50 ? 'bg-amber-400' : 'bg-red-400'}`}
+                style={{ width: `${agent.health_score}%` }}
+              />
+            </div>
           </button>
         ))}
       </div>

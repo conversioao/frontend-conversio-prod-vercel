@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Search, Edit, ShieldAlert, Check, User, History, CreditCard, Layers, X, ExternalLink, Filter, Zap, Mail } from 'lucide-react';
+import { Search, Edit, ShieldAlert, Check, User, History, CreditCard, Layers, X, ExternalLink, Filter, Zap, Mail, Clock, CheckCircle, XCircle, MessageSquare } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { apiFetch } from '../../lib/api';
 import { ConfirmationModal } from '../ui/ConfirmationModal';
@@ -19,6 +19,7 @@ export function AdminUsers() {
   const [selectedCampaign, setSelectedCampaign] = useState<any>(null);
   const [loadingCampaignDetails, setLoadingCampaignDetails] = useState(false);
   const [campaignLogs, setCampaignLogs] = useState<any[]>([]);
+  const [approvingCampaign, setApprovingCampaign] = useState<number | null>(null);
   
   const [modal, setModal] = useState<{
     isOpen: boolean;
@@ -69,7 +70,8 @@ export function AdminUsers() {
 
   const fetchCampaigns = async () => {
     try {
-      const res = await apiFetch(`/admin/campaigns?adminId=${adminId}`);
+      // Buscar apenas campanhas direcionadas a utilizadores (audience_type = 'users')
+      const res = await apiFetch(`/admin/campaigns?audience=users`);
       const data = await res.json();
       if (data.success) {
         setCampaigns(data.campaigns);
@@ -186,16 +188,62 @@ export function AdminUsers() {
       const res = await apiFetch('/admin/campaigns', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ adminId, name: campName, type: campType, message: campMessage })
+        // audience_type = 'users' -> cria em pending_approval, requer aprovacão do admin
+        body: JSON.stringify({ name: campName, type: campType, message: campMessage, audience_type: 'users' })
       });
       if (res.ok) {
+        const data = await res.json();
         setShowCampaignForm(false);
         setCampName('');
         setCampMessage('');
         fetchCampaigns();
+        if (data.needsApproval) {
+          setModal({
+            isOpen: true,
+            title: '✅ Campanha Criada — Aguarda Aprovação',
+            message: 'A campanha foi criada e está pendente de aprovação do administrador. Após aprovada, será enviada no próximo ciclo de campanhas.',
+            type: 'info'
+          });
+        }
       }
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const handleApproveCampaign = async (campId: number) => {
+    setApprovingCampaign(campId);
+    try {
+      const res = await apiFetch(`/admin/campaigns/${campId}/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      if (res.ok) {
+        fetchCampaigns();
+        setModal({ isOpen: true, title: '✅ Campanha Aprovada', message: 'Campanha aprovada e será enviada no próximo ciclo.', type: 'success' });
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setApprovingCampaign(null);
+    }
+  };
+
+  const handleRejectCampaign = async (campId: number) => {
+    setApprovingCampaign(campId);
+    try {
+      const res = await apiFetch(`/admin/campaigns/${campId}/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: 'Rejeitado pelo administrador' })
+      });
+      if (res.ok) {
+        fetchCampaigns();
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setApprovingCampaign(null);
     }
   };
 
@@ -411,65 +459,96 @@ export function AdminUsers() {
       {activeTab === 'campaigns' && (
         <div className="space-y-8">
            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              {campaigns.map((camp) => (
-                <div key={camp.id} className="bg-surface border border-border-subtle rounded-3xl p-6 relative overflow-hidden group">
-                  <div className={`absolute top-0 right-0 w-2 h-full ${camp.type === 'email' ? 'bg-blue-500' : 'bg-emerald-500'}`}></div>
-                  <div className="flex justify-between mb-4">
-                     <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest ${camp.type === 'email' ? 'bg-blue-500/10 text-blue-500' : 'bg-emerald-500/10 text-emerald-500'}`}>
-                       {camp.type === 'email' ? 'Marketing Email' : 'Marketing WhatsApp'}
-                     </span>
-                     <span className={`text-[10px] font-bold ${camp.status === 'sent' ? 'text-emerald-500' : 'text-yellow-500'}`}>
-                       {camp.status === 'sent' ? 'Enviada' : 'Rascunho'}
-                     </span>
-                  </div>
-                  <h4 className="text-lg font-black text-text-primary mb-2 line-clamp-1">{camp.name}</h4>
-                  <p className="text-xs text-text-tertiary line-clamp-2 mb-6">{camp.message}</p>
-                  
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
-                     <div className="bg-bg-base/50 p-3 rounded-2xl border border-border-subtle">
-                        <p className="text-[9px] text-text-tertiary font-black uppercase">Entregues</p>
-                        <p className="text-sm font-black text-emerald-500">{camp.total_delivered || 0}</p>
-                     </div>
-                     <div className="bg-bg-base/50 p-3 rounded-2xl border border-border-subtle">
-                        <p className="text-[9px] text-text-tertiary font-black uppercase">Abertos</p>
-                        <p className="text-sm font-black text-blue-500">{camp.total_read || 0}</p>
-                     </div>
-                     <div className="bg-bg-base/50 p-3 rounded-2xl border border-border-subtle">
-                        <p className="text-[9px] text-text-tertiary font-black uppercase">Respostas</p>
-                        <p className="text-sm font-black text-orange-500">{camp.total_replied || 0}</p>
-                     </div>
-                     <div className="bg-bg-base/50 p-3 rounded-2xl border border-border-subtle">
-                        <p className="text-[9px] text-text-tertiary font-black uppercase">Falhas</p>
-                        <p className="text-sm font-black text-red-500">{camp.total_failed || 0}</p>
-                     </div>
-                  </div>
-
-                  <div className="flex items-center justify-between pt-4 mt-4 border-t border-border-subtle">
-                     <div className="flex flex-col">
-                        <span className="text-[10px] text-text-tertiary uppercase font-black">Alcance Alvo</span>
-                        <span className="text-sm font-black">{camp.target_count || 0} Leads</span>
-                     </div>
-                     <div className="flex items-center gap-2">
-                        <button 
-                          onClick={() => fetchCampaignDetails(camp)}
-                          className="p-2.5 bg-white/5 hover:bg-white/10 text-text-tertiary hover:text-white rounded-xl transition-all border border-white/5"
-                          title="Ver Detalhes"
-                        >
-                          <Layers size={18} />
-                        </button>
-                        {camp.status !== 'sent' && (
-                          <button 
-                            onClick={() => handleSendCampaign(camp.id)}
-                            className="p-2.5 bg-[#FFB800] text-black rounded-xl hover:scale-110 active:scale-95 transition-all shadow-lg shadow-[#FFB800]/20"
-                            title="Disparar Campanha"
-                          >
-                            <Zap size={18} fill="currentColor" />
-                          </button>
-                        )}
-                     </div>
-                  </div>
+              {campaigns.length === 0 && (
+                <div className="lg:col-span-3 py-16 text-center text-text-tertiary text-sm">
+                  <MessageSquare size={32} className="mx-auto mb-3 opacity-30" />
+                  Nenhuma campanha de utilizadores criada ainda.
                 </div>
-              ))}
+              )}
+              {campaigns.map((camp) => {
+                const isPending = camp.status === 'pending_approval';
+                const isApproved = camp.status === 'approved' || camp.status === 'sent' || camp.status === 'sending';
+                const isRejected = camp.status === 'rejected';
+                return (
+                  <div key={camp.id} className={`bg-surface border rounded-3xl p-6 relative overflow-hidden group transition-all ${isPending ? 'border-[#FFB800]/40 shadow-[0_0_20px_rgba(255,184,0,0.08)]' : isRejected ? 'border-red-500/20 opacity-60' : 'border-border-subtle'}`}>
+                    {/* Status stripe */}
+                    <div className={`absolute top-0 left-0 w-full h-1 ${isPending ? 'bg-[#FFB800]' : isApproved ? 'bg-emerald-500' : isRejected ? 'bg-red-500' : 'bg-zinc-700'}`} />
+                    
+                    <div className="flex justify-between mb-4 mt-2">
+                       <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest ${camp.type === 'email' ? 'bg-blue-500/10 text-blue-500' : 'bg-emerald-500/10 text-emerald-500'}`}>
+                         {camp.type === 'email' ? 'Email' : 'WhatsApp'}
+                       </span>
+                       <span className={`flex items-center gap-1 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border ${
+                         isPending ? 'bg-[#FFB800]/10 text-[#FFB800] border-[#FFB800]/30' :
+                         isApproved ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' :
+                         isRejected ? 'bg-red-500/10 text-red-500 border-red-500/20' :
+                         'bg-zinc-700/30 text-zinc-400 border-zinc-700/40'
+                       }`}>
+                         {isPending ? <><Clock size={10} />Aguarda Aprovação</> :
+                          isApproved ? <><CheckCircle size={10} />Aprovada</> :
+                          isRejected ? <><XCircle size={10} />Rejeitada</> : 'Rascunho'}
+                       </span>
+                    </div>
+                    <h4 className="text-lg font-black text-text-primary mb-2 line-clamp-1">{camp.name}</h4>
+                    <p className="text-xs text-text-tertiary line-clamp-2 mb-4">{camp.message}</p>
+                    
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
+                       <div className="bg-bg-base/50 p-3 rounded-2xl border border-border-subtle">
+                          <p className="text-[9px] text-text-tertiary font-black uppercase">Entregues</p>
+                          <p className="text-sm font-black text-emerald-500">{camp.total_delivered || 0}</p>
+                       </div>
+                       <div className="bg-bg-base/50 p-3 rounded-2xl border border-border-subtle">
+                          <p className="text-[9px] text-text-tertiary font-black uppercase">Lidos</p>
+                          <p className="text-sm font-black text-blue-500">{camp.total_read || 0}</p>
+                       </div>
+                       <div className="bg-bg-base/50 p-3 rounded-2xl border border-border-subtle">
+                          <p className="text-[9px] text-text-tertiary font-black uppercase">Respostas</p>
+                          <p className="text-sm font-black text-orange-500">{camp.total_replied || 0}</p>
+                       </div>
+                       <div className="bg-bg-base/50 p-3 rounded-2xl border border-border-subtle">
+                          <p className="text-[9px] text-text-tertiary font-black uppercase">Falhas</p>
+                          <p className="text-sm font-black text-red-500">{camp.total_failed || 0}</p>
+                       </div>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-4 mt-4 border-t border-border-subtle">
+                       <div className="flex flex-col">
+                          <span className="text-[10px] text-text-tertiary uppercase font-black">Alcance Alvo</span>
+                          <span className="text-sm font-black">{camp.target_count || 0} Utilizadores</span>
+                       </div>
+                       <div className="flex items-center gap-2">
+                         <button 
+                           onClick={() => fetchCampaignDetails(camp)}
+                           className="p-2.5 bg-white/5 hover:bg-white/10 text-text-tertiary hover:text-white rounded-xl transition-all border border-white/5"
+                           title="Ver Destinatários"
+                         >
+                           <Layers size={18} />
+                         </button>
+                         {isPending && (
+                           <>
+                             <button 
+                               onClick={() => handleApproveCampaign(camp.id)}
+                               disabled={approvingCampaign === camp.id}
+                               className="flex items-center gap-1.5 px-3 py-2 bg-emerald-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
+                               title="Aprovar Campanha"
+                             >
+                               <CheckCircle size={14} />Aprovar
+                             </button>
+                             <button 
+                               onClick={() => handleRejectCampaign(camp.id)}
+                               disabled={approvingCampaign === camp.id}
+                               className="flex items-center gap-1.5 px-3 py-2 bg-red-500/10 text-red-400 border border-red-500/20 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-red-500/20 transition-all disabled:opacity-50"
+                               title="Rejeitar Campanha"
+                             >
+                               <XCircle size={14} />Rejeitar
+                             </button>
+                           </>
+                         )}
+                       </div>
+                    </div>
+                  </div>
+                );
+              })}
            </div>
         </div>
       )}

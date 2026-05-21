@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ParticlesBackground } from './ui/ParticlesBackground';
-import { ImagePlus, Sparkles, Smartphone, Copy, Mic, Send, Download, ThumbsUp, MoreHorizontal, X, Plus, Maximize2, ArrowRight, Globe, Loader2, CheckCircle2, AlertCircle, Zap, Trash2, Layers, ChevronRight, Camera, Package, MessagesSquare, MapPin, TrendingUp, MonitorPlay, BookOpen, Target, Users, Search, Box, Layout } from 'lucide-react';
+import { ImagePlus, Sparkles, Smartphone, Copy, Mic, Send, Download, ThumbsUp, MoreHorizontal, X, Plus, Maximize2, ArrowRight, Globe, Loader2, CheckCircle2, AlertCircle, Zap, Trash2, Layers, ChevronRight, Camera, Package, MessagesSquare, MapPin, TrendingUp, MonitorPlay, BookOpen, Target, Users, Search, Box, Layout, Image as ImageIcon } from 'lucide-react';
 import { apiFetch } from '../lib/api';
 import { ConfirmationModal } from './ui/ConfirmationModal';
 import { useMobile } from '../hooks/useMobile';
@@ -21,8 +21,12 @@ const AGENT_CORES = [
   { id: 'boutique-fashion', name: 'LUANDALOOKS AGENT', agentTechnicalId: 'boutique-fashion', style_id: 'boutique-fashion', icon: Sparkles, description: 'Especialista em Publicidade de Moda para Angola.', credit_cost: 4, category: 'normal' },
   { id: 'glow-angola', name: 'GLOWANGOLA PRO', agentTechnicalId: 'glow-angola', style_id: 'glow-angola', icon: Sparkles, description: 'Especialista em Cosmética, Cabelo e Beleza para Angola.', credit_cost: 4, category: 'normal' },
   { id: 'impact-ads-pro', name: 'VIBRA ANGOLA', agentTechnicalId: 'impact-ads-pro', style_id: 'impact-ads-pro', icon: Zap, description: 'Anúncios de alto impacto com inteligência visual.', credit_cost: 5, category: 'normal' },
-  { id: 'branding-kit', name: 'BRANDING MASTER', agentTechnicalId: 'branding-kit', style_id: 'branding-kit', icon: Layers, description: 'Gera 5 anúncios consistentes de uma só vez para a sua marca.', credit_cost: 20, category: 'branding' },
-  { id: 'social-ads-kit', name: 'SOCIAL ADS KIT', agentTechnicalId: 'social-ads-kit', style_id: 'social-ads-kit', icon: Layout, description: 'Gera 6 anúncios variados para redes sociais com consistência visual.', credit_cost: 25, category: 'branding' },
+  { id: 'branding-kit', name: 'Identidade de Marca Premium', agentTechnicalId: 'branding-kit', style_id: 'branding-kit', icon: Layers, description: 'Gera 5 anúncios consistentes de uma só vez para a sua marca.', credit_cost: 20, category: 'branding' },
+  { id: 'social-ads-kit', name: 'Kit de Anúncios de Alta Conversão', agentTechnicalId: 'social-ads-kit', style_id: 'social-ads-kit', icon: Layout, description: 'Gera 6 anúncios variados para redes sociais com consistência visual.', credit_cost: 25, category: 'branding' },
+  { id: 'brand-amazon', name: 'Estilo E-Commerce Minimalist', agentTechnicalId: 'brand-amazon', style_id: 'brand-amazon', icon: Package, description: 'Kit de 6 frames com estética limpa, focada no produto e fundo profissional de estúdio para qualquer e-commerce.', credit_cost: 25, category: 'branding' },
+  { id: 'brand-cosmetics', name: 'Estilo Editorial Premium', agentTechnicalId: 'brand-cosmetics', style_id: 'brand-cosmetics', icon: Sparkles, description: 'Kit de 9 frames sofisticados com layout bipartido de revista e modelo interagindo com o seu produto.', credit_cost: 30, category: 'branding' },
+  { id: 'brand-burger', name: 'Estilo Dinâmico de Impacto', agentTechnicalId: 'brand-burger', style_id: 'brand-burger', icon: Zap, description: 'Kit de 9 frames macro dinâmicos com efeitos de luz dramáticos, partículas em movimento rápido e badge de preço.', credit_cost: 30, category: 'branding' },
+  { id: 'brand-sweets', name: 'Estilo Pop Pastel Vibrante', agentTechnicalId: 'brand-sweets', style_id: 'brand-sweets', icon: Sparkles, description: 'Kit de 9 frames alegres com cores pastéis vibrantes, tipografia moderna arredondada e composições criativas.', credit_cost: 30, category: 'branding' },
 ];
 
 // Styles are FREE — only Models and Cores have credit costs
@@ -74,6 +78,47 @@ const AGENT_STYLES: Record<string, any[]> = {
     { id: 'Social 5', name: 'WhatsApp Status', icon: MessagesSquare, desc: 'Direto e eficaz para vendas no WhatsApp.' },
     { id: 'Social 6', name: 'Twitter/X Hook', icon: Sparkles, desc: 'Design impactante para o feed do X.' },
   ],
+  'brand-amazon': [
+    { id: 'amazon-frame-1', name: 'Hero Shot Principal', icon: Package, desc: 'Imagem hero limpa fundo branco, produto centrado com sombra suave e nome da marca.' },
+    { id: 'amazon-frame-2', name: 'Ingredientes Botânicos', icon: Sparkles, desc: 'Composição flat-lay com folhas verdes, plantas e frascos de suplementos sobre fundo branco.' },
+    { id: 'amazon-frame-3', name: 'Tabela de Benefícios', icon: Target, desc: 'Infográfico comparativo: ícones dos benefícios do produto lado a lado com texto em pt-AO.' },
+    { id: 'amazon-frame-4', name: 'Close-up do Rótulo', icon: Search, desc: 'Zoom fotográfico no rótulo do produto: ingredientes ativos, dosagem e certificação.' },
+    { id: 'amazon-frame-5', name: 'Estilo de Vida Saudável', icon: Users, desc: 'Modelo africano saudável usando/segurando o produto em ambiente clean (casa, ginásio).' },
+    { id: 'amazon-frame-6', name: 'Balanço Diário', icon: Layers, desc: 'Flat-lay de rotina diária: produto + copo de água + frutas, em superfície neutra.' },
+  ],
+  'brand-cosmetics': [
+    { id: 'cosm-frame-1', name: 'Hero de Luxo', icon: Sparkles, desc: 'Produto sobre fundo roxo/violeta profundo com iluminação rim dramática e partículas douradas.' },
+    { id: 'cosm-frame-2', name: 'Gota de Sérum', icon: Search, desc: 'Macro extremo de gota de sérum saindo do conta-gotas: textura, brilho e viscosidade.' },
+    { id: 'cosm-frame-3', name: 'Modelo Pele Radiante', icon: Camera, desc: 'Modelo feminina africana de pele luminosa com overlay de card elegante e copy em pt-AO.' },
+    { id: 'cosm-frame-4', name: 'Rituais de Beleza', icon: MessagesSquare, desc: 'Flat-lay de ritual de skin: produto + pétala de rosa + toalha branca + pedras.' },
+    { id: 'cosm-frame-5', name: 'Textura do Creme', icon: Layers, desc: 'Close-up de creme sendo espalhado na pele com textura suave e cor bege/nude.' },
+    { id: 'cosm-frame-6', name: 'Resultado Antes/Depois', icon: Target, desc: 'Painel dividido mostrando resultado: pele antes e depois do uso do produto.' },
+    { id: 'cosm-frame-7', name: 'Editorial Minimal', icon: Box, desc: 'Composição minimalista: produto + fundo branco liso + tipografia serifada premium em pt-AO.' },
+    { id: 'cosm-frame-8', name: 'Glow Night Ritual', icon: Sparkles, desc: 'Ambiente noturno aconchegante: vela acesa + produto + espelho e toques dourados.' },
+    { id: 'cosm-frame-9', name: 'Overlay Card Elegante', icon: Layout, desc: 'Produto com card sobreposição mostrando ingredientes-chave e benefício principal.' },
+  ],
+  'brand-burger': [
+    { id: 'burger-frame-1', name: 'Hero Hambúrguer Voador', icon: Zap, desc: 'Hambúrguer explodindo em câmara lenta com ingredientes flutuando, fundo vermelho vibrante.' },
+    { id: 'burger-frame-2', name: 'Close-up Queijo a Derreter', icon: Search, desc: 'Macro do queijo fundido e dourado a escorrer pelo pão artesanal com foco desfocado.' },
+    { id: 'burger-frame-3', name: 'Combo Completo', icon: Package, desc: 'Combo com hambúrguer, batatas fritas e bebida em tabuleiro, fundo âmbar quente.' },
+    { id: 'burger-frame-4', name: 'Badge de Oferta', icon: Target, desc: 'Hambúrguer com badge de desconto ou promoção sobreposto — cor vermelha e tipografia bold.' },
+    { id: 'burger-frame-5', name: 'Scooter de Entrega', icon: Zap, desc: 'Entregador em scooter com caixa de entrega — fundo urbano estilizado, cor laranja/vermelho.' },
+    { id: 'burger-frame-6', name: 'Ingredientes Premium', icon: Layers, desc: 'Flat-lay de ingredientes frescos: pão, carne, alface, tomate e queijo com fundo de madeira.' },
+    { id: 'burger-frame-7', name: 'Mão Segurando', icon: Camera, desc: 'Mão segurando hambúrguer: ângulo POV casual, fundo bokeh de restaurante.' },
+    { id: 'burger-frame-8', name: 'Grelha em Ação', icon: MonitorPlay, desc: 'Hambúrguer na grelha com chama e fumo visíveis, estética de churrascaria gourmet.' },
+    { id: 'burger-frame-9', name: 'Menu Digital Bold', icon: Layout, desc: 'Layout de menu digital vibrante: produto + preço + nome em tipografia extra-bold.' },
+  ],
+  'brand-sweets': [
+    { id: 'sweets-frame-1', name: 'Copo de Gelato Hero', icon: Sparkles, desc: 'Copo de gelato colorido em rosa/azul com bolas empilhadas e cobertura de frutas.' },
+    { id: 'sweets-frame-2', name: 'Casquinha Waffle', icon: Camera, desc: 'Casquinha de waffle crocante com duas bolas de gelado em verde e amarelo, fundo pastel.' },
+    { id: 'sweets-frame-3', name: 'Rostos Felizes', icon: Users, desc: 'Crianças/famílias africanas felizes segurando gelados — energia alegre e vibrante.' },
+    { id: 'sweets-frame-4', name: 'Picolé Colorido', icon: Zap, desc: 'Picolés de frutas em fundo branco limpo, cores vibrantes laranja/vermelho/verde.' },
+    { id: 'sweets-frame-5', name: 'Milkshake Premium', icon: Search, desc: 'Milkshake alto com creme, calda e fruta: fundo colorido, straw com padrão.' },
+    { id: 'sweets-frame-6', name: 'Flat-lay de Doces', icon: Layers, desc: 'Vista de cima: variedade de gelados e doces sobre superfície azul claro com sprinkles.' },
+    { id: 'sweets-frame-7', name: 'Textura Close-up', icon: Box, desc: 'Macro de textura de gelado: cremosidade, cores e cristais de gelo visíveis.' },
+    { id: 'sweets-frame-8', name: 'Promoção Verão', icon: Target, desc: 'Arte de promoção verão: sol, ondas estilizadas e produto em destaque — tipografia bold.' },
+    { id: 'sweets-frame-9', name: 'Embalagem para Levar', icon: Package, desc: 'Embalagem takeaway do produto com logo e cores da marca — fundo degrade pastel.' },
+  ],
 };
 
 const RATIOS = [
@@ -101,7 +146,7 @@ export function ImageGenerator({ initialCore, onClearCore, onProgressUpdate }: I
   const [selectedModel, setSelectedModel] = useState<any>(null);
   const [selectedCore, setSelectedCore] = useState<any>(AGENT_CORES[0]); // Default: REELANGOLA UGC
   const [styleConfigs, setStyleConfigs] = useState<Record<string, {checked: boolean, quantity: number, aspectRatio: string}>>({});
-  const [includeText, setIncludeText] = useState(false);
+  const [useBrandLogo, setUseBrandLogo] = useState(false);
   const [useBrandColors, setUseBrandColors] = useState(false);
   const [brandData, setBrandData] = useState<any>(null);
   const [checkingBrand, setCheckingBrand] = useState(false);
@@ -239,12 +284,14 @@ export function ImageGenerator({ initialCore, onClearCore, onProgressUpdate }: I
 
   const fetchModels = async () => {
     try {
-      const [modelsRes, coresRes] = await Promise.all([
+      const [modelsRes, coresRes, brandingRes] = await Promise.all([
         apiFetch('/models?category=model&type=image'),
-        apiFetch('/models?category=core&type=image')
+        apiFetch('/models?category=core&type=image'),
+        apiFetch('/models?category=branding&type=image')
       ]);
       const modelsData = await modelsRes.json();
       const coresData = await coresRes.json();
+      const brandingData = await brandingRes.json();
 
       if (modelsData.success) {
         let models = modelsData.models;
@@ -260,8 +307,15 @@ export function ImageGenerator({ initialCore, onClearCore, onProgressUpdate }: I
         setSelectedModel(models[0]);
       }
 
-      if (coresData.success && coresData.models && coresData.models.length > 0) {
-        let dbCores = coresData.models;
+      let dbCores = [];
+      if (coresData.success && coresData.models) {
+        dbCores.push(...coresData.models);
+      }
+      if (brandingData.success && brandingData.models) {
+        dbCores.push(...brandingData.models);
+      }
+
+      if (dbCores.length > 0) {
         const mergedCores = dbCores.map((dbCore: any) => {
           const staticCore = AGENT_CORES.find(c => 
             c.style_id === dbCore.style_id || 
@@ -270,6 +324,10 @@ export function ImageGenerator({ initialCore, onClearCore, onProgressUpdate }: I
             (dbCore.style_id === 'V-PRO' && c.id === 'impact-ads-pro') ||
             (dbCore.style_id === 'CV-02' && c.id === 'boutique-fashion') ||
             (dbCore.style_id === 'CV-01' && c.id === 'ugc-realistic') ||
+            (dbCore.style_id === 'brand-amazon' && c.id === 'brand-amazon') ||
+            (dbCore.style_id === 'brand-cosmetics' && c.id === 'brand-cosmetics') ||
+            (dbCore.style_id === 'brand-burger' && c.id === 'brand-burger') ||
+            (dbCore.style_id === 'brand-sweets' && c.id === 'brand-sweets') ||
             (dbCore.name?.toLowerCase().includes('glow') && c.id === 'glow-angola') ||
             (dbCore.name?.toLowerCase().includes('impact') && c.id === 'impact-ads-pro') ||
             (dbCore.name?.toLowerCase().includes('ugc') && c.id === 'ugc-realistic') ||
@@ -397,7 +455,7 @@ export function ImageGenerator({ initialCore, onClearCore, onProgressUpdate }: I
         formData.append('style', '');
       }
 
-      formData.append('include_text', includeText.toString());
+      formData.append('use_brand_logo', useBrandLogo.toString());
       formData.append('use_brand_colors', useBrandColors.toString());
       if (brandData) {
           formData.append('brand_colors', JSON.stringify(brandData.brand_colors || brandData.colors || {}));
@@ -420,7 +478,7 @@ export function ImageGenerator({ initialCore, onClearCore, onProgressUpdate }: I
       if (characterFile) {
         formData.append('character_image', characterFile);
       }
-      formData.append('include_text', includeText.toString());
+      formData.append('use_brand_logo', useBrandLogo.toString());
       formData.append('use_brand_colors', useBrandColors.toString());
       formData.append('aspect_ratio', ratio);
       formData.append('quantity', quantity.toString());
@@ -516,7 +574,7 @@ export function ImageGenerator({ initialCore, onClearCore, onProgressUpdate }: I
       setSseProgress(prev => prev ? { ...prev, elapsed } : null);
     }, 1000);
 
-    const apiBase = (import.meta.env.VITE_API_URL || 'http://localhost:3003');
+    const apiBase = (import.meta.env.VITE_API_URL || 'https://conversioai-conversio-ai-backend.odbegs.easypanel.host');
     const es = new EventSource(`${apiBase}/api/generations/progress/${batchId}`);
     sseRef.current = es;
 
@@ -861,7 +919,7 @@ export function ImageGenerator({ initialCore, onClearCore, onProgressUpdate }: I
                              <span className="hidden sm:inline opacity-60 font-medium border-l border-[#FFB800]/20 pl-1.5 ml-0.5">{activeStyleConfigs.length} Estilo{activeStyleConfigs.length > 1 ? 's' : ''}</span>
                           )}
                           {selectedCore && (
-                             <span className="hidden sm:inline opacity-60 font-medium border-l border-[#FFB800]/20 pl-1.5">{includeText ? 'C/ Texto' : 'S/ Texto'}</span>
+                             <span className="hidden sm:inline opacity-60 font-medium border-l border-[#FFB800]/20 pl-1.5">{useBrandLogo ? 'C/ Logo' : 'S/ Logo'}</span>
                           )}
                         </span>
                         {selectedCore && (
@@ -1072,230 +1130,275 @@ export function ImageGenerator({ initialCore, onClearCore, onProgressUpdate }: I
               )}
 
               {wizardStep === 2 && selectedCore && (
-                <div className="flex flex-col gap-10 animate-in fade-in slide-in-from-bottom-4 duration-500 mb-10 pb-4">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500 mb-10 pb-4">
                   
-                  {/* Section: Basic Settings */}
-                  <div className="space-y-6">
-                    <div className="flex items-center gap-3 px-2">
-                        <div className="w-1 h-4 bg-[#FFB800] rounded-full" />
-                        <h4 className="text-[11px] font-black text-white uppercase tracking-[0.2em] opacity-40">Configurações Base</h4>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {/* Aspect Ratio */}
-                        <div className="p-6 rounded-[2rem] bg-white/[0.03] border border-white/5 flex flex-col gap-4">
-                            <span className="text-[10px] font-black text-text-tertiary uppercase tracking-widest">Formato da Imagem</span>
-                            <div className="flex flex-wrap gap-2">
-                                {RATIOS.map(r => (
-                                    <button
-                                        key={r.id}
-                                        onClick={() => {
-                                          setRatio(r.id);
-                                          // Update all active style configs to match the new global ratio
-                                          setStyleConfigs(prev => {
-                                            const next = { ...prev };
-                                            Object.keys(next).forEach(key => {
-                                              next[key] = { ...next[key], aspectRatio: r.id };
-                                            });
-                                            return next;
-                                          });
-                                        }}
-                                        className={`flex-1 min-w-[80px] py-3 rounded-2xl text-[10px] font-bold transition-all border ${ratio === r.id ? 'bg-[#FFB800] text-black border-[#FFB800] shadow-[0_0_15px_rgba(255,184,0,0.3)]' : 'bg-white/5 text-text-secondary border-white/5 hover:border-white/20'}`}
-                                    >
-                                        {r.id}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* Quantity (Only for non-kits) */}
-                        {!isKit && (
-                            <div className="p-6 rounded-[2rem] bg-white/[0.03] border border-white/5 flex flex-col gap-4">
-                                <span className="text-[10px] font-black text-text-tertiary uppercase tracking-widest">Quantidade de Criativos</span>
-                                <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-                                    {QUANTITIES.filter(q => q <= getBatchLimit({ plan: plan })).map(q => (
-                                        <button
-                                            key={q}
-                                            onClick={() => setQuantity(q)}
-                                            className={`w-10 h-10 shrink-0 rounded-xl text-xs font-black transition-all border ${quantity === q ? 'bg-[#FFB800] text-black border-[#FFB800]' : 'bg-white/5 text-text-secondary border-white/5 hover:border-white/20'}`}
-                                        >
-                                            {q}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Summary for Kits */}
-                        {isKit && (
-                             <div className="p-6 rounded-[2rem] bg-[#FFB800]/5 border border-[#FFB800]/20 flex flex-col justify-center gap-2">
-                                <div className="flex items-center gap-2">
-                                    <Layers size={16} className="text-[#FFB800]" />
-                                    <span className="text-[11px] font-black text-white uppercase tracking-widest">{selectedCore.name}</span>
-                                </div>
-                                <p className="text-[9px] text-text-tertiary leading-relaxed opacity-60">
-                                    Este kit gera automaticamente {isBrandingKit ? '5' : '6'} assets temáticos com consistência visual garantida.
-                                </p>
-                             </div>
-                        )}
-                    </div>
-                  </div>
-
-                  {/* Section: Resolution Selection (Conditional) */}
-                  {(selectedModel?.style_id === 'nano-banana-2' || selectedModel?.style_id === 'nano-banana-pro' || selectedModel?.style_id === 'google/nano-banana-edit' || selectedModel?.style_id === 'gpt-image-2-image-to-image' || selectedModel?.name?.includes('Nano Banana') || selectedModel?.name?.includes('GPT Image 2')) && (
-                    <div className="space-y-6 animate-in fade-in slide-in-from-top-4 duration-500">
-                      <div className="flex items-center gap-3 px-2">
-                        <div className="w-1 h-4 bg-[#FFB800] rounded-full" />
-                        <h4 className="text-[11px] font-black text-white uppercase tracking-[0.2em] opacity-40">Resolução Premium</h4>
+                  {/* Left Column: Core Setup (5 Grid Columns) */}
+                  <div className="lg:col-span-5 space-y-6">
+                    
+                    {/* Unified Settings Card */}
+                    <div className="p-6 rounded-[2rem] bg-white/[0.02] border border-white/5 space-y-6">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-1 h-3.5 bg-[#FFB800] rounded-full" />
+                        <span className="text-[10px] font-black text-white uppercase tracking-[0.15em]">Parâmetros Base</span>
                       </div>
 
-                      <div className="grid grid-cols-3 gap-3 p-2">
-                        {['1k', '2k', '4k'].map(res => (
-                          <button
-                            key={res}
-                            onClick={() => setSelectedResolution(res)}
-                            className={`py-4 rounded-2xl border transition-all flex flex-col items-center justify-center gap-1 group ${selectedResolution === res ? 'bg-[#FFB800]/10 border-[#FFB800]/50 shadow-[0_0_20px_rgba(255,184,0,0.1)]' : 'bg-white/[0.03] border-white/5 hover:border-white/20'}`}
+                      {/* Aspect Ratio */}
+                      <div className="space-y-2.5">
+                        <span className="text-[9px] font-bold text-text-tertiary uppercase tracking-wider block">Formato da Imagem</span>
+                        <div className="grid grid-cols-4 gap-1.5">
+                          {RATIOS.map(r => (
+                            <button
+                              key={r.id}
+                              onClick={() => {
+                                setRatio(r.id);
+                                setStyleConfigs(prev => {
+                                  const next = { ...prev };
+                                  Object.keys(next).forEach(key => {
+                                    next[key] = { ...next[key], aspectRatio: r.id };
+                                  });
+                                  return next;
+                                });
+                              }}
+                              className={`py-2 rounded-xl text-[10px] font-black transition-all border ${ratio === r.id ? 'bg-[#FFB800] text-black border-[#FFB800] shadow-[0_0_10px_rgba(255,184,0,0.2)]' : 'bg-white/5 text-text-secondary border-white/5 hover:border-white/10'}`}
+                            >
+                              {r.id}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Quantity (Non-Kits) */}
+                      {!isKit && (
+                        <div className="space-y-2.5 pt-2 border-t border-white/5">
+                          <span className="text-[9px] font-bold text-text-tertiary uppercase tracking-wider block">Quantidade de Criativos</span>
+                          <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
+                            {QUANTITIES.filter(q => q <= getBatchLimit({ plan: plan })).map(q => (
+                              <button
+                                key={q}
+                                onClick={() => setQuantity(q)}
+                                className={`w-8 h-8 shrink-0 rounded-lg text-[10px] font-black transition-all border ${quantity === q ? 'bg-[#FFB800] text-black border-[#FFB800]' : 'bg-white/5 text-text-secondary border-white/5 hover:border-white/10'}`}
+                              >
+                                {q}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Kit Badge Summary */}
+                      {isKit && (
+                        <div className="p-4 rounded-2xl bg-[#FFB800]/5 border border-[#FFB800]/10 flex items-start gap-3">
+                          <Layers size={14} className="text-[#FFB800] shrink-0 mt-0.5" />
+                          <div className="space-y-1">
+                            <span className="text-[9px] font-black text-white uppercase tracking-wider block">{selectedCore.name}</span>
+                            <p className="text-[8px] text-text-tertiary leading-relaxed opacity-70">
+                              Esta campanha gera automaticamente {selectedCore.id === 'brand-amazon' ? '6' : selectedCore.id === 'branding-kit' ? '5' : '9'} frames premium com consistência visual.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Premium Resolution (If applicable) */}
+                    {(selectedModel?.style_id === 'nano-banana-2' || selectedModel?.style_id === 'nano-banana-pro' || selectedModel?.style_id === 'google/nano-banana-edit' || selectedModel?.style_id === 'gpt-image-2-image-to-image' || selectedModel?.name?.includes('Nano Banana') || selectedModel?.name?.includes('GPT Image 2')) && (
+                      <div className="p-6 rounded-[2rem] bg-white/[0.02] border border-white/5 space-y-4">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-1 h-3.5 bg-[#FFB800] rounded-full" />
+                          <span className="text-[10px] font-black text-white uppercase tracking-[0.15em]">Resolução Premium</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                          {['1k', '2k', '4k'].map(res => (
+                            <button
+                              key={res}
+                              onClick={() => setSelectedResolution(res)}
+                              className={`py-2.5 rounded-xl border transition-all flex flex-col items-center justify-center gap-0.5 group ${selectedResolution === res ? 'bg-[#FFB800]/10 border-[#FFB800]/40 shadow-[0_0_15px_rgba(255,184,0,0.1)]' : 'bg-white/5 border-white/5 hover:border-white/10'}`}
+                            >
+                              <span className={`text-[10px] font-black uppercase tracking-wider ${selectedResolution === res ? 'text-[#FFB800]' : 'text-white/60 group-hover:text-white'}`}>{res}</span>
+                              <span className="text-[7px] opacity-40 uppercase font-bold tracking-tighter">
+                                {res === '1k' ? 'Standard' : res === '2k' ? 'HD' : 'Ultra HD'}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Brand & Creative Optimization */}
+                    <div className="p-6 rounded-[2rem] bg-white/[0.02] border border-white/5 space-y-4">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-1 h-3.5 bg-[#FFB800] rounded-full" />
+                        <span className="text-[10px] font-black text-white uppercase tracking-[0.15em]">Otimização de Marca</span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <button 
+                          onClick={async () => {
+                            if (useBrandColors) { setUseBrandColors(false); return; }
+                            setCheckingBrand(true);
+                            try {
+                              const res = await apiFetch(`/brands/${user.id}`);
+                              const data = await res.json();
+                              if (data.success && data.brand) {
+                                setBrandData(data.brand);
+                                setUseBrandColors(true);
+                              } else {
+                                setConfirmModalConfig({ title: 'Marca não Configurada', message: 'Ainda não tem uma identidade de marca configurada.', type: 'info', onConfirm: () => setShowConfirmModal(false) });
+                                setShowConfirmModal(true);
+                              }
+                            } catch (e) { setUseBrandColors(false); } finally { setCheckingBrand(false); }
+                          }}
+                          className={`p-4 rounded-2xl border transition-all flex flex-col gap-2.5 text-left group ${useBrandColors ? 'bg-[#FFB800]/10 border-[#FFB800]/30 shadow-[0_0_15px_rgba(255,184,0,0.08)]' : 'bg-white/5 border-white/5 hover:border-white/10'}`}
+                        >
+                          <div className="flex items-center justify-between w-full">
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${useBrandColors ? 'bg-[#FFB800] text-black shadow-md' : 'bg-white/5 text-text-tertiary group-hover:text-white'}`}>
+                              {checkingBrand ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                            </div>
+                            <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${useBrandColors ? 'bg-[#FFB800] border-[#FFB800]' : 'border-white/10'}`}>
+                              {useBrandColors && <CheckCircle2 size={10} className="text-black" />}
+                            </div>
+                          </div>
+                          <div>
+                            <span className={`text-[10px] font-black uppercase tracking-wider block ${useBrandColors ? 'text-white' : 'text-text-secondary'}`}>Identidade</span>
+                            <span className="text-[8px] opacity-40 block mt-0.5">Aplicar cores da marca</span>
+                          </div>
+                        </button>
+
+                        {brandData?.logo_url && (
+                          <button 
+                            onClick={() => setUseBrandLogo(!useBrandLogo)}
+                            className={`p-4 rounded-2xl border transition-all flex flex-col gap-2.5 text-left group ${useBrandLogo ? 'bg-[#FFB800]/10 border-[#FFB800]/30 shadow-[0_0_15px_rgba(255,184,0,0.08)]' : 'bg-white/5 border-white/5 hover:border-white/10'}`}
                           >
-                            <span className={`text-xs font-black uppercase tracking-widest ${selectedResolution === res ? 'text-[#FFB800]' : 'text-white/60 group-hover:text-white'}`}>{res}</span>
-                            <span className="text-[8px] font-medium opacity-40 uppercase tracking-tighter">
-                              {res === '1k' ? 'Standard' : res === '2k' ? 'High Def' : 'Ultra HD'}
-                            </span>
+                            <div className="flex items-center justify-between w-full">
+                              <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${useBrandLogo ? 'bg-[#FFB800] text-black shadow-md' : 'bg-white/5 text-text-tertiary group-hover:text-white'}`}>
+                                <ImageIcon size={16} />
+                              </div>
+                              <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${useBrandLogo ? 'bg-[#FFB800] border-[#FFB800]' : 'border-white/10'}`}>
+                                {useBrandLogo && <CheckCircle2 size={10} className="text-black" />}
+                              </div>
+                            </div>
+                            <div>
+                              <span className={`text-[10px] font-black uppercase tracking-wider block ${useBrandLogo ? 'text-white' : 'text-text-secondary'}`}>Logótipo</span>
+                              <span className="text-[8px] opacity-40 block mt-0.5">Visível nos criativos</span>
+                            </div>
                           </button>
-                        ))}
+                        )}
                       </div>
                     </div>
-                  )}
 
-                  {/* Section: Brand & Options */}
-                  <div className="space-y-6">
-                    <div className="flex items-center gap-3 px-2">
-                        <div className="w-1 h-4 bg-[#FFB800] rounded-full" />
-                        <h4 className="text-[11px] font-black text-white uppercase tracking-[0.2em] opacity-40">Otimização Criativa</h4>
-                    </div>
+                    {/* Character Upload (Conditional) */}
+                    {(['ugc-realistic', 'boutique-fashion'].includes(selectedCore?.agentTechnicalId) || ['ugc-realistic', 'boutique-fashion'].includes(selectedCore?.id)) && (
+                      <div className="p-6 rounded-[2rem] bg-white/[0.02] border border-white/5 space-y-4">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-1 h-3.5 bg-[#FFB800] rounded-full" />
+                          <span className="text-[10px] font-black text-white uppercase tracking-[0.15em]">Personagem de Referência</span>
+                        </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <button 
-                            onClick={async () => {
-                                if (useBrandColors) { setUseBrandColors(false); return; }
-                                setCheckingBrand(true);
-                                try {
-                                    const res = await apiFetch(`/brands/${user.id}`);
-                                    const data = await res.json();
-                                    if (data.success && data.brand) {
-                                        setBrandData(data.brand);
-                                        setUseBrandColors(true);
-                                    } else {
-                                        setConfirmModalConfig({ title: 'Marca não Configurada', message: 'Ainda não tem uma identidade de marca configurada.', type: 'info', onConfirm: () => setShowConfirmModal(false) });
-                                        setShowConfirmModal(true);
-                                    }
-                                } catch (e) { setUseBrandColors(false); } finally { setCheckingBrand(false); }
-                            }}
-                            className={`p-6 rounded-[2rem] border transition-all flex items-center gap-4 text-left group ${useBrandColors ? 'bg-[#FFB800]/10 border-[#FFB800]/40 shadow-[0_0_20px_rgba(255,184,0,0.1)]' : 'bg-white/[0.03] border-white/5 hover:border-white/20'}`}
+                        <div 
+                          onClick={() => characterFileInputRef.current?.click()}
+                          className={`relative group cursor-pointer aspect-[16/7] rounded-2xl border-2 border-dashed transition-all flex flex-col items-center justify-center gap-2.5 overflow-hidden ${characterPreview ? 'border-[#FFB800]/40 bg-[#FFB800]/5' : 'border-white/10 hover:border-[#FFB800]/20 bg-white/[0.01]'}`}
                         >
-                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${useBrandColors ? 'bg-[#FFB800] text-black shadow-lg' : 'bg-white/5 text-text-tertiary group-hover:text-white'}`}>
-                                {checkingBrand ? <Loader2 size={24} className="animate-spin" /> : <Sparkles size={24} />}
-                            </div>
-                            <div className="flex-1">
-                                <span className={`text-[11px] font-black uppercase tracking-wider block ${useBrandColors ? 'text-white' : 'text-text-secondary'}`}>Identidade Visual</span>
-                                <span className="text-[9px] font-medium opacity-50 block mt-1">Aplicar paleta de cores da sua marca</span>
-                            </div>
-                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${useBrandColors ? 'bg-[#FFB800] border-[#FFB800]' : 'border-white/10'}`}>
-                                {useBrandColors && <CheckCircle2 size={12} className="text-black" />}
-                            </div>
-                        </button>
-
-                        <button 
-                            onClick={() => setIncludeText(!includeText)}
-                            className={`p-6 rounded-[2rem] border transition-all flex items-center gap-4 text-left group ${includeText ? 'bg-[#FFB800]/10 border-[#FFB800]/40 shadow-[0_0_20px_rgba(255,184,0,0.1)]' : 'bg-white/[0.03] border-white/5 hover:border-white/20'}`}
-                        >
-                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${includeText ? 'bg-[#FFB800] text-black shadow-lg' : 'bg-white/5 text-text-tertiary group-hover:text-white'}`}>
-                                <Smartphone size={24} />
-                            </div>
-                            <div className="flex-1">
-                                <span className={`text-[11px] font-black uppercase tracking-wider block ${includeText ? 'text-white' : 'text-text-secondary'}`}>Copy & Textos</span>
-                                <span className="text-[9px] font-medium opacity-50 block mt-1">Incluir chamadas de texto no criativo</span>
-                            </div>
-                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${includeText ? 'bg-[#FFB800] border-[#FFB800]' : 'border-white/10'}`}>
-                                {includeText && <CheckCircle2 size={12} className="text-black" />}
-                            </div>
-                        </button>
-                    </div>
+                          {characterPreview ? (
+                            <>
+                              <img src={characterPreview} className="absolute inset-0 w-full h-full object-cover opacity-20 blur-md" />
+                              <div className="relative z-10 flex items-center gap-4 px-4 py-2">
+                                <div className="w-12 h-12 rounded-full border-2 border-[#FFB800]/50 p-0.5 bg-black/40 backdrop-blur-md overflow-hidden">
+                                  <img src={characterPreview} className="w-full h-full object-cover rounded-full" />
+                                </div>
+                                <div className="text-left">
+                                  <span className="text-[9px] font-black text-[#FFB800] uppercase tracking-wider block">Personagem Ativa</span>
+                                  <button 
+                                    onClick={(e) => { e.stopPropagation(); setCharacterPreview(null); setCharacterFile(null); }} 
+                                    className="text-[8px] font-bold text-white/40 hover:text-white transition-colors uppercase tracking-widest mt-0.5"
+                                  >
+                                    Remover
+                                  </button>
+                                </div>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="w-9 h-9 rounded-xl bg-[#FFB800]/10 flex items-center justify-center text-[#FFB800] group-hover:scale-105 transition-transform">
+                                <Users size={16} />
+                              </div>
+                              <div className="text-center">
+                                <span className="text-[9px] font-black text-white uppercase tracking-widest block">Foto de Referência</span>
+                                <span className="text-[8px] text-text-tertiary mt-0.5 block opacity-50">Mantém o mesmo rosto no criativo</span>
+                              </div>
+                            </>
+                          )}
+                          <input type="file" ref={characterFileInputRef} className="hidden" accept="image/*" onChange={(e) => handleFileChange(e, 'character')} />
+                        </div>
+                      </div>
+                    )}
                   </div>
 
-                  {/* Character Upload for UGC and Luandalooks */}
-                  {(['ugc-realistic', 'boutique-fashion'].includes(selectedCore?.agentTechnicalId) || ['ugc-realistic', 'boutique-fashion'].includes(selectedCore?.id)) && (
-                    <div className="space-y-6 animate-in fade-in slide-in-from-top-4 duration-500">
+                  {/* Right Column: Style/Frames Selection (7 Grid Columns) */}
+                  <div className="lg:col-span-7 space-y-6">
+                    
+                    {/* IF BRANDING KIT: Show integrated checklist frames */}
+                    {isKit && (
+                      <div className="space-y-4">
                         <div className="flex items-center gap-3 px-2">
-                            <div className="w-1 h-4 bg-[#FFB800] rounded-full" />
-                            <h4 className="text-[11px] font-black text-white uppercase tracking-[0.2em] opacity-40">Personagem Principal (Opcional)</h4>
+                          <div className="w-1.5 h-4 bg-[#FFB800] rounded-full" />
+                          <h4 className="text-[11px] font-black text-white uppercase tracking-[0.2em]">Frames de Campanha Integrados</h4>
                         </div>
                         
-                        <div 
-                            onClick={() => characterFileInputRef.current?.click()}
-                            className={`relative group cursor-pointer aspect-[21/9] rounded-[2.5rem] border-2 border-dashed transition-all flex flex-col items-center justify-center gap-4 overflow-hidden ${characterPreview ? 'border-[#FFB800]/50 bg-[#FFB800]/5' : 'border-white/10 hover:border-[#FFB800]/30 bg-white/[0.02]'}`}
-                        >
-                            {characterPreview ? (
-                                <>
-                                    <img src={characterPreview} className="absolute inset-0 w-full h-full object-cover opacity-40 blur-md" />
-                                    <div className="relative z-10 flex flex-col items-center gap-4 p-8">
-                                        <div className="w-24 h-24 rounded-full border-4 border-[#FFB800]/50 p-1 bg-black/40 backdrop-blur-md overflow-hidden shadow-2xl">
-                                            <img src={characterPreview} className="w-full h-full object-cover rounded-full" />
-                                        </div>
-                                        <div className="text-center">
-                                            <span className="text-xs font-black text-white uppercase tracking-widest bg-[#FFB800] text-black px-6 py-2 rounded-full shadow-lg block mb-2">Personagem Ativa</span>
-                                            <button onClick={(e) => { e.stopPropagation(); setCharacterPreview(null); setCharacterFile(null); }} className="text-[10px] font-bold text-white/40 hover:text-white transition-colors uppercase tracking-widest">Remover Personagem</button>
-                                        </div>
-                                    </div>
-                                </>
-                            ) : (
-                                <>
-                                    <div className="w-16 h-16 rounded-[1.5rem] bg-[#FFB800]/10 flex items-center justify-center text-[#FFB800] group-hover:scale-110 transition-transform">
-                                        <Users size={32} />
-                                    </div>
-                                    <div className="text-center">
-                                        <span className="text-[11px] font-black text-white uppercase tracking-widest block">Carregar Foto do Personagem</span>
-                                        <span className="text-[9px] font-medium text-text-tertiary mt-2 block opacity-60 max-w-[280px] mx-auto">Use uma foto de referência para manter o mesmo rosto nos anúncios UGC</span>
-                                    </div>
-                                </>
-                            )}
-                            <input type="file" ref={characterFileInputRef} className="hidden" accept="image/*" onChange={(e) => handleFileChange(e, 'character')} />
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[500px] overflow-y-auto pr-1 scrollbar-thin">
+                          {(AGENT_STYLES[selectedCore.agentTechnicalId] || AGENT_STYLES[selectedCore.id] || []).map((s: any, idx: number) => {
+                            const Icon = s.icon || Sparkles;
+                            return (
+                              <div key={s.id} className="flex items-start gap-4.5 p-4 rounded-3xl bg-white/[0.02] border border-white/5 hover:border-white/10 transition-colors">
+                                <div className="w-9 h-9 shrink-0 rounded-2xl bg-[#FFB800]/10 flex items-center justify-center text-[#FFB800]">
+                                  <span className="text-[10px] font-black">#{idx + 1}</span>
+                                </div>
+                                <div className="space-y-1">
+                                  <span className="text-[10px] font-black text-white block leading-tight uppercase tracking-wider">{s.name}</span>
+                                  <p className="text-[8.5px] text-text-tertiary leading-relaxed opacity-70">{s.desc}</p>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
-                    </div>
-                  )}
+                      </div>
+                    )}
 
-                  {/* Style Selection Grid (Only for non-kits) */}
-                  {!isKit && (
-                    <div className="space-y-6">
+                    {/* IF REGULAR AGENT: Show checklist of Narrative Styles */}
+                    {!isKit && (
+                      <div className="space-y-4">
                         <div className="flex items-center gap-3 px-2">
-                            <div className="w-1 h-4 bg-[#FFB800] rounded-full" />
-                            <h4 className="text-[11px] font-black text-white uppercase tracking-[0.2em] opacity-40">Estilos Narrativos</h4>
+                          <div className="w-1.5 h-4 bg-[#FFB800] rounded-full" />
+                          <h4 className="text-[11px] font-black text-white uppercase tracking-[0.2em]">Estilos Narrativos</h4>
                         </div>
                         
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {(AGENT_STYLES[selectedCore.agentTechnicalId as keyof typeof AGENT_STYLES] || AGENT_STYLES[selectedCore.id as keyof typeof AGENT_STYLES] || []).map((s: any) => {
-                                const config = styleConfigs[s.name] || { checked: false, quantity: 1, aspectRatio: '9:16' };
-                                const isSelected = config.checked;
-                                const Icon = s.icon || Sparkles;
-                                return (
-                                    <div key={s.id} className={`flex flex-col p-6 rounded-[2.5rem] border transition-all group ${isSelected ? 'bg-white/[0.06] border-[#FFB800]/50 shadow-[0_0_30px_rgba(255,184,0,0.1)]' : 'bg-white/[0.02] border-white/5 hover:border-white/20'}`}>
-                                        <div className="flex items-center gap-4 mb-4 cursor-pointer" onClick={() => setStyleConfigs(prev => ({ ...prev, [s.name]: { ...config, checked: !config.checked } }))}>
-                                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${isSelected ? 'bg-[#FFB800] text-black shadow-lg' : 'bg-white/5 text-text-tertiary group-hover:text-white'}`}>
-                                                <Icon size={20} />
-                                            </div>
-                                            <div className="flex-1">
-                                                <span className={`text-[11px] font-black uppercase tracking-wider block leading-tight ${isSelected ? 'text-white' : 'text-text-secondary'}`}>{s.name}</span>
-                                                {s.desc && <span className="text-[9px] font-medium opacity-50 leading-tight block text-text-tertiary mt-1 line-clamp-2">{s.desc}</span>}
-                                            </div>
-                                            <div className={`w-6 h-6 shrink-0 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-[#FFB800] border-[#FFB800]' : 'border-white/10 group-hover:border-white/20'}`}>
-                                                {isSelected && <CheckCircle2 size={12} className="text-black" />}
-                                            </div>
-                                        </div>
-                                    </div>
-                                );
-                            })}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[500px] overflow-y-auto pr-1 scrollbar-thin">
+                          {(AGENT_STYLES[selectedCore.agentTechnicalId as keyof typeof AGENT_STYLES] || AGENT_STYLES[selectedCore.id as keyof typeof AGENT_STYLES] || []).map((s: any) => {
+                            const config = styleConfigs[s.name] || { checked: false, quantity: 1, aspectRatio: '9:16' };
+                            const isSelected = config.checked;
+                            const Icon = s.icon || Sparkles;
+                            return (
+                              <div 
+                                key={s.id} 
+                                onClick={() => setStyleConfigs(prev => ({ ...prev, [s.name]: { ...config, checked: !config.checked } }))}
+                                className={`flex items-start gap-4 p-4 rounded-3xl border transition-all cursor-pointer group ${isSelected ? 'bg-[#FFB800]/5 border-[#FFB800]/40 shadow-[0_0_20px_rgba(255,184,0,0.06)]' : 'bg-white/[0.02] border-white/5 hover:border-white/10'}`}
+                              >
+                                <div className={`w-9 h-9 shrink-0 rounded-2xl flex items-center justify-center transition-all ${isSelected ? 'bg-[#FFB800] text-black shadow-md' : 'bg-white/5 text-text-tertiary group-hover:text-white'}`}>
+                                  <Icon size={16} />
+                                </div>
+                                <div className="flex-1 space-y-1">
+                                  <span className={`text-[10px] font-black uppercase tracking-wider block leading-tight ${isSelected ? 'text-white' : 'text-text-secondary'}`}>{s.name}</span>
+                                  {s.desc && <span className="text-[8.5px] text-text-tertiary leading-relaxed block opacity-70 line-clamp-2">{s.desc}</span>}
+                                </div>
+                                <div className={`w-5 h-5 shrink-0 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-[#FFB800] border-[#FFB800]' : 'border-white/10 group-hover:border-white/20'}`}>
+                                  {isSelected && <CheckCircle2 size={10} className="text-black" />}
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
-                    </div>
-                  )}
+                      </div>
+                    )}
+
+                  </div>
                 </div>
               )}
 

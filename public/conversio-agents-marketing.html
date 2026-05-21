@@ -1075,15 +1075,19 @@ function renderOutput(entry, config) {
 
   const hashtagsStr = allHashtags.join(' ');
 
-  const fullCreative = `
-${titulo}
+  // ─── Copy type labels ───
+  const mediaLabel = isVideo ? '🎬 Vídeos Profissionais' : '🖼️ Imagens de Alta Qualidade';
+  const agentLabel = config.name ? config.name.toUpperCase() : 'CONVERSIO AI';
 
-${hook}
-
-${cta}
-
-${hashtagsStr}
-  `.trim();
+  const fullCreative = [
+    titulo,
+    '',
+    hook,
+    '',
+    '🎁 OFERTA EXCLUSIVA: Regista-te em www.conversio.ao e ganha 1.000 créditos grátis para começar a criar os teus anúncios hoje! 🚀',
+    '',
+    hashtagsStr
+  ].join('\n').trim();
 
   const tabsHtml = `
     <button class="output-tab active" onclick="switchTab(this,'tab-prompt')">${isVideo ? 'Prompt Sora' : 'Prompt Imagem'}</button>
@@ -1153,7 +1157,7 @@ ${escHtml(fullCreative)}
           </div>
 
           <div style="margin-top:1.5rem; text-align:center">
-            <span style="font-size:0.8rem; color:var(--white3)">Conteúdo otimizado com Gancho, CTA (conversio.ao) e Hashtags.</span>
+            <span style="font-size:0.8rem; color:var(--white3)">Copy gerado por IA • Inclui Gancho · Proposta de Valor · CTA persuasivo · Oferta de 1.000 Créditos Grátis em <strong style="color:var(--amber)">www.conversio.ao</strong> · Hashtags Angola</span>
           </div>
         </div>
       </div>

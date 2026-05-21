@@ -260,14 +260,7 @@ export function GenerationViewer({
                 >
                   <Check size={16} strokeWidth={3} /> Copiar Tudo
                 </button>
-                {item.type === 'image' && (
-                  <button
-                    onClick={() => setShowEditor(true)}
-                    className="w-full py-4 rounded-2xl bg-[#FFB800]/10 text-[#FFB800] border border-[#FFB800]/20 font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 active:scale-[0.97] transition-transform"
-                  >
-                    <Edit2 size={16} /> Adicionar Logótipo
-                  </button>
-                )}
+
                 <button
                   onClick={handleDownload}
                   className="w-full py-4 rounded-2xl bg-white/5 text-white font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 border border-white/10 active:scale-[0.97] transition-transform"
@@ -406,14 +399,7 @@ export function GenerationViewer({
               >
                 <Check size={16} strokeWidth={3} /> Copiar Tudo
               </button>
-              {item.type === 'image' && (
-                <button
-                  onClick={() => setShowEditor(true)}
-                  className="w-full py-4 rounded-2xl bg-[#FFB800]/10 text-[#FFB800] border border-[#FFB800]/20 font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-[#FFB800]/20 active:scale-[0.98] transition-all"
-                >
-                  <Edit2 size={18} /> Adicionar Logótipo
-                </button>
-              )}
+
               <button
                 onClick={handleDownload}
                 className="w-full py-4 rounded-2xl bg-white/5 text-white font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 border border-white/10 hover:bg-white/10 transition-all active:scale-[0.98]"

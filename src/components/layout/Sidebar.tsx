@@ -25,7 +25,7 @@ export function Sidebar({ activePage = 'home', onNavigate, onLogout, isOpen = fa
     { id: 'editor', icon: PenTool, label: 'Editor Pro', visible: planConfig.hasEditor },
     { id: 'generate-video', icon: Video, label: 'Gerar Vídeo', visible: planConfig.hasMediaGen, generating: isGeneratingVideo },
     { id: 'generate-audio', icon: Music, label: 'Gerar Música', visible: planConfig.hasMediaGen, generating: isGeneratingAudio },
-    { id: 'marketing', icon: Target, label: 'Gerador Marketing', visible: true },
+
     { id: 'branding', icon: Sparkles, label: 'Identidade de Marca', visible: true },
     { id: 'audio-gallery', icon: Headphones, label: 'Biblioteca Áudio', visible: planConfig.hasMediaGen },
     { id: 'projects', icon: Folder, label: 'Projetos', visible: true },

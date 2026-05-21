@@ -16,13 +16,15 @@ export const CampaignManager: React.FC<CampaignManagerProps> = ({ campaigns, onR
     const [newCampaign, setNewCampaign] = useState({
         name: '',
         message_template: '',
-        target_segment: 'all'
+        target_segment: 'all',
+        target_type: 'user'
     });
 
     const statusIcons: any = {
         active: <Send className="text-emerald-400" size={14} />,
         paused: <Pause className="text-amber-400" size={14} />,
         completed: <CheckCircle className="text-blue-400" size={14} />,
+        pending_approval: <Clock className="text-amber-500" size={14} />,
         draft: <Clock className="text-slate-500" size={14} />
     };
 
@@ -33,11 +35,20 @@ export const CampaignManager: React.FC<CampaignManagerProps> = ({ campaigns, onR
             const res = await api.post('/admin/crm/campaigns', newCampaign);
             if (res.ok) {
                 setIsCreateOpen(false);
-                setNewCampaign({ name: '', message_template: '', target_segment: 'all' });
+                setNewCampaign({ name: '', message_template: '', target_segment: 'all', target_type: 'user' });
                 if (onRefresh) onRefresh();
             }
         } finally {
             setSaving(false);
+        }
+    };
+
+    const handleAction = async (id: string, action: 'approve' | 'pause' | 'resume') => {
+        try {
+            await api.post(`/admin/campaigns/${id}/${action}`, {});
+            if (onRefresh) onRefresh();
+        } catch (e) {
+            console.error(e);
         }
     };
 
@@ -106,8 +117,13 @@ export const CampaignManager: React.FC<CampaignManagerProps> = ({ campaigns, onR
                                         </div>
                                     </td>
                                     <td className="px-10 py-8">
-                                        <div className="flex items-center gap-2 px-3 py-1.5 bg-surface rounded-lg border border-border-subtle w-fit text-[10px] font-black text-text-secondary uppercase tracking-widest">
-                                            <Users size={12} className="text-[#FFB800]" /> {camp.target_segment || 'Todos'}
+                                        <div className="flex flex-col gap-2">
+                                            <div className="flex items-center gap-2 px-3 py-1.5 bg-surface rounded-lg border border-border-subtle w-fit text-[10px] font-black text-text-secondary uppercase tracking-widest">
+                                                <Users size={12} className="text-[#FFB800]" /> {camp.target_segment || 'Todos'}
+                                            </div>
+                                            <span className="text-[9px] font-bold text-text-tertiary uppercase tracking-widest opacity-60">
+                                                Alvo: {camp.target_type === 'whatsapp_lead' ? 'Leads WhatsApp' : 'Utilizadores'}
+                                            </span>
                                         </div>
                                     </td>
                                     <td className="px-10 py-8">
@@ -133,6 +149,32 @@ export const CampaignManager: React.FC<CampaignManagerProps> = ({ campaigns, onR
                                     </td>
                                     <td className="px-10 py-8">
                                         <div className="flex justify-end gap-3">
+                                            {camp.status === 'pending_approval' && (
+                                                <button 
+                                                    onClick={() => handleAction(camp.id, 'approve')}
+                                                    className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400 hover:bg-emerald-500/20 transition-all shadow-sm flex items-center gap-2 text-[10px] font-black uppercase"
+                                                >
+                                                    <CheckCircle size={16} /> Aprovar
+                                                </button>
+                                            )}
+                                            {camp.status === 'active' && (
+                                                <button 
+                                                    onClick={() => handleAction(camp.id, 'pause')}
+                                                    className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-400 hover:bg-amber-500/20 transition-all shadow-sm"
+                                                    title="Pausar"
+                                                >
+                                                    <Pause size={16} />
+                                                </button>
+                                            )}
+                                            {camp.status === 'paused' && (
+                                                <button 
+                                                    onClick={() => handleAction(camp.id, 'resume')}
+                                                    className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400 hover:bg-emerald-500/20 transition-all shadow-sm"
+                                                    title="Continuar"
+                                                >
+                                                    <RefreshCw size={16} />
+                                                </button>
+                                            )}
                                             <button className="p-3 bg-surface border border-border-subtle rounded-xl text-text-tertiary hover:text-[#FFB800] hover:border-[#FFB800]/30 transition-all shadow-sm">
                                                 <BarChart3 size={16} />
                                             </button>
@@ -179,7 +221,26 @@ export const CampaignManager: React.FC<CampaignManagerProps> = ({ campaigns, onR
                                 </div>
 
                                 <div className="space-y-4">
-                                    <label className="text-[10px] font-black text-text-tertiary uppercase tracking-widest px-1">Segmentação de Usuários</label>
+                                    <label className="text-[10px] font-black text-text-tertiary uppercase tracking-widest px-1">Tipo de Audiência</label>
+                                    <div className="grid grid-cols-2 gap-4">
+                                         {[
+                                             { id: 'user', label: 'Utilizadores Registados' },
+                                             { id: 'whatsapp_lead', label: 'Leads do WhatsApp' }
+                                         ].map(type => (
+                                              <button 
+                                                   key={type.id}
+                                                   type="button"
+                                                   onClick={() => setNewCampaign({...newCampaign, target_type: type.id})}
+                                                   className={`py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all ${newCampaign.target_type === type.id ? 'bg-[#FFB800] text-black border-[#FFB800] shadow-xl shadow-[#FFB800]/20' : 'bg-surface text-text-tertiary border-border-subtle hover:border-[#FFB800]/30'}`}
+                                              >
+                                                   {type.label}
+                                              </button>
+                                         ))}
+                                    </div>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <label className="text-[10px] font-black text-text-tertiary uppercase tracking-widest px-1">Segmentação</label>
                                     <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
                                          {['all', 'VIP', 'Qualified', 'Prospect', 'inactive'].map(seg => (
                                               <button 

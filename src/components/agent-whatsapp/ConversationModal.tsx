@@ -5,9 +5,10 @@ import { apiFetch } from '../../lib/api';
 interface ConversationModalProps {
   contact: any;
   onClose: () => void;
+  adminMode?: boolean;
 }
 
-export function ConversationModal({ contact, onClose }: ConversationModalProps) {
+export function ConversationModal({ contact, onClose, adminMode }: ConversationModalProps) {
   const [messages, setMessages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [newMessage, setNewMessage] = useState('');
@@ -27,7 +28,8 @@ export function ConversationModal({ contact, onClose }: ConversationModalProps) 
   const fetchMessages = async () => {
     try {
       setLoading(true);
-      const res = await apiFetch(`/agent/contacts/${contact.id}/messages`);
+      const url = `/agent/contacts/${contact.id}/messages${adminMode ? '?admin_leads=true' : ''}`;
+      const res = await apiFetch(url);
       const data = await res.json();
       if (data.success) {
         setMessages(data.messages);
@@ -109,22 +111,25 @@ export function ConversationModal({ contact, onClose }: ConversationModalProps) 
             messages.map((msg, i) => (
               <div key={i} className={`flex ${msg.direction === 'inbound' ? 'justify-start' : 'justify-end'}`}>
                 <div className={`max-w-[85%] rounded-2xl px-4 py-3 relative ${
-                  msg.direction === 'inbound' 
+                  msg.role === 'user' || msg.direction === 'inbound' 
                     ? 'bg-zinc-900 text-zinc-300 border border-zinc-800 rounded-bl-none' 
-                    : 'bg-amber-500 text-black font-medium rounded-br-none shadow-lg shadow-amber-500/10'
+                    : msg.role === 'system'
+                       ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20 rounded-br-none'
+                       : 'bg-amber-500 text-black font-medium rounded-br-none shadow-lg shadow-amber-500/10'
                 }`}>
                   <p className="text-[13px] leading-relaxed whitespace-pre-wrap">{msg.content}</p>
                   
                   <div className={`flex items-center gap-2 mt-1.5 text-[9px] font-bold uppercase tracking-wider ${
-                    msg.direction === 'inbound' ? 'text-zinc-600' : 'text-black/50'
+                    (msg.role === 'user' || msg.direction === 'inbound') ? 'text-zinc-600' : 
+                    msg.role === 'system' ? 'text-amber-500/60' : 'text-black/50'
                   }`}>
                     {new Date(msg.sent_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     
-                    {msg.direction === 'outbound' && (
-                      <div className="flex items-center gap-1">
-                        • {msg.message_type === 'human' ? 'Manual' : 'AI Agent'}
-                      </div>
-                    )}
+                    <div className="flex items-center gap-1">
+                      • {msg.role === 'system' ? 'System (Conversio)' :
+                         msg.role === 'human' || msg.message_type === 'human' ? 'Manual' : 'AI Agent'}
+                      {msg.instance_name && ` • ${msg.instance_name}`}
+                    </div>
                   </div>
                 </div>
               </div>

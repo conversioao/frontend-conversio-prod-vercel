@@ -12,6 +12,8 @@ import { Settings } from './components/Settings';
 import { Profile } from './components/Profile';
 import { LandingPage } from './components/LandingPage';
 import { AuthPage } from './components/AuthPage';
+import { ForgotPasswordPage } from './components/ForgotPasswordPage';
+import { MustChangePasswordModal } from './components/MustChangePasswordModal';
 import { Discover } from './components/Discover';
 import { AdminLayout } from './components/admin/AdminLayout';
 import { ProEditor } from './components/ProEditor';
@@ -55,7 +57,7 @@ export default function App() {
 
     // Browser Mode
     if (!token || !user) {
-      if (savedPage && ['landing', 'auth', 'video-cores-info', 'image-cores-info', 'branding', 'agent-whatsapp-setup'].includes(savedPage)) {
+      if (savedPage && ['landing', 'auth', 'video-cores-info', 'image-cores-info', 'branding', 'agent-whatsapp-setup', 'forgot-password'].includes(savedPage)) {
         return savedPage;
       }
       return 'landing';
@@ -282,12 +284,12 @@ export default function App() {
       // Utilizador não autenticado
       if (pwaMode) {
         // No PWA, apenas redireciona para landing ou auth se tentar ir para página privada sem login
-        if (!['landing', 'auth', 'video-cores-info', 'image-cores-info', 'agent-whatsapp-setup'].includes(currentPage)) {
+        if (!['landing', 'auth', 'video-cores-info', 'image-cores-info', 'agent-whatsapp-setup', 'forgot-password'].includes(currentPage)) {
           setCurrentPage('landing');
         }
       } else {
         // Browser normal: mostrar landing se não estiver numa página pública
-        if (!['landing', 'auth', 'video-cores-info', 'image-cores-info', 'agent-whatsapp-setup'].includes(currentPage)) {
+        if (!['landing', 'auth', 'video-cores-info', 'image-cores-info', 'agent-whatsapp-setup', 'forgot-password'].includes(currentPage)) {
           setCurrentPage('landing');
         }
       }
@@ -562,10 +564,21 @@ export default function App() {
     return <AuthPage onLogin={() => handleNavigate('home')} onNavigate={handleNavigate} />;
   }
 
+  if (currentPage === 'forgot-password') {
+    return <ForgotPasswordPage onNavigate={handleNavigate} onSuccess={() => handleNavigate('auth')} />;
+  }
+
   const renderContent = () => {
     if (currentPage === 'home') {
       return (
         <>
+          {user?.must_change_password && (
+            <MustChangePasswordModal onSuccess={() => {
+              // Refresh user in state to remove flag
+              const updatedUser = { ...user, must_change_password: false };
+              setUser(updatedUser);
+            }} />
+          )}
           {/* Welcome section */}
           <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-12 mt-4 w-full relative">
             <div className="flex flex-col items-start md:items-start text-left mt-6 md:mt-0">

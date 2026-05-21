@@ -84,6 +84,10 @@ export function AuthPage({ onLogin, onNavigate }: AuthPageProps) {
      onLogin();
   };
 
+  const handleRecoverPassword = () => {
+    onNavigate('forgot-password');
+  };
+
   return (
     <div className="flex min-h-screen bg-[#050508] font-sans text-white overflow-hidden selection:bg-[#FFB800]/30 selection:text-white">
       {/* Left Column: Form */}
@@ -148,7 +152,7 @@ export function AuthPage({ onLogin, onNavigate }: AuthPageProps) {
             <div className="relative group">
               <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 group-focus-within:text-[#FFB800] transition-colors" size={20} strokeWidth={1.5} />
               <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="Palavra-passe" className="w-full bg-white/[0.02] border border-white/[0.05] rounded-xl py-4 pl-12 pr-4 text-white placeholder-white/30 focus:outline-none focus:border-[#FFB800]/50 focus:bg-[#FFB800]/[0.02] transition-all text-sm font-medium focus:ring-4 focus:ring-[#FFB800]/10" />
-              {isLogin && <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[#FFB800] text-xs font-bold cursor-pointer hover:underline">Esqueceu?</span>}
+              {isLogin && <span onClick={handleRecoverPassword} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#FFB800] text-xs font-bold cursor-pointer hover:underline z-10" title="Recuperar senha via WhatsApp">Esqueceu?</span>}
             </div>
 
             <button type="submit" disabled={isLoading} className="w-full disabled:opacity-50 disabled:cursor-not-allowed bg-white text-black font-black py-4 rounded-xl shadow-[0_0_30px_rgba(255,255,255,0.1)] hover:bg-[#FFB800] transition-all mt-4 flex justify-center items-center gap-2 group text-[15px]">

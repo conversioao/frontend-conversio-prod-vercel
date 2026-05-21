@@ -1,22 +1,43 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Download, Trash2, Play, Image as ImageIcon, Video, Maximize2, X, Filter, Loader2, ChevronLeft, ChevronRight, Share2, Globe, Check, CheckCircle2, AlertCircle, Mic, Plus } from 'lucide-react';
+import { Download, Trash2, Play, Image as ImageIcon, Video, Maximize2, X, Filter, Loader2, ChevronLeft, ChevronRight, Share2, Globe, Check, CheckCircle2, AlertCircle, Mic, Plus, Folder, Eye, DownloadCloud, Layers } from 'lucide-react';
 import { VList } from 'virtua';
 import { GenerationViewer } from './ui/GenerationViewer';
 import { apiFetch } from '../lib/api';
+import { apiCache } from '../lib/apiCache';
 import { ConfirmationModal } from './ui/ConfirmationModal';
 import { useIntersectionObserver } from '../hooks/useIntersectionObserver';
+
+const KIT_NAMES: Record<string, string> = {
+  'branding-kit': 'Conversio Branding Master',
+  'social-ads-kit': 'Conversio Social Ads Kit',
+  'brand-amazon': 'Conversio E-Com & Supplements',
+  'brand-cosmetics': 'Conversio Premium Skincare & Glow',
+  'brand-burger': 'Conversio Gourmet Fast-Food',
+  'brand-sweets': 'Conversio Sweet Gelato & Delights'
+};
+
+const KIT_COLORS: Record<string, string> = {
+  'branding-kit': 'from-blue-500 to-indigo-600 border-blue-500/30',
+  'social-ads-kit': 'from-pink-500 to-rose-600 border-pink-500/30',
+  'brand-amazon': 'from-green-500 to-emerald-600 border-green-500/30',
+  'brand-cosmetics': 'from-purple-500 to-violet-600 border-purple-500/30',
+  'brand-burger': 'from-red-500 to-amber-600 border-red-500/30',
+  'brand-sweets': 'from-cyan-400 to-pink-500 border-cyan-400/30'
+};
 
 export function Gallery({ generationProgress }: { generationProgress?: number | null }) {
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterType, setFilterType] = useState('all');
   const [expandedItem, setExpandedItem] = useState<any | null>(null);
+  const [expandedCampaign, setExpandedCampaign] = useState<any | null>(null);
+  const [error, setError] = useState<string | null>(null);
   
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
-  const ITEMS_PER_PAGE = 18;
+  const ITEMS_PER_PAGE = 24; // Increased default since kits are grouped
 
   const [publishing, setPublishing] = useState<string | null>(null);
   const [publishStatus, setPublishStatus] = useState<{id: string, success: boolean, message: string} | null>(null);
@@ -37,51 +58,81 @@ export function Gallery({ generationProgress }: { generationProgress?: number | 
   const user = JSON.parse(localStorage.getItem('conversio_user') || '{}');
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  const fetchGenerations = async (page: number) => {
+  const fetchGenerations = useCallback(async (page: number, silent = false) => {
     if (!user.id) return;
-    
-    setLoading(true);
+
+    const cacheKey = `gallery:${user.id}:${page}:${filterType}`;
+
+    // Stale-while-revalidate: mostrar dados em cache imediatamente
+    const stale = apiCache.getStale<any>(cacheKey);
+    if (stale && !silent) {
+      setItems(stale.generations || []);
+      setTotalPages(stale.totalPages || 1);
+      setTotalItems(stale.totalCount || 0);
+      setCurrentPage(stale.currentPage || page);
+      if (!apiCache.isStale(cacheKey)) {
+        setLoading(false);
+        return;
+      }
+    }
+
+    if (!silent) setLoading(true);
+    setError(null);
     try {
       const typeQuery = filterType !== 'all' ? `&type=${filterType}` : '';
-      const response = await apiFetch(`/generations?userId=${user.id}&page=${page}&limit=${ITEMS_PER_PAGE}${typeQuery}&excludeTypes=audio,voice,musica,music`);
-      if (!response.ok) return; 
-      
+      const response = await apiFetch(`/generations?userId=${user.id}&page=${page}&limit=${ITEMS_PER_PAGE}${typeQuery}`);
+      if (!response.ok) return;
+
       const data = await response.json();
+      apiCache.set(cacheKey, data, 30);
+
       setItems(data.generations || []);
       setTotalPages(data.totalPages || 1);
       setTotalItems(data.totalCount || 0);
       setCurrentPage(data.currentPage || page);
-      
-      // Scroll to top of gallery on page change
-      if (scrollContainerRef.current) {
+
+      if (!silent && scrollContainerRef.current) {
         scrollContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
       }
-    } catch (err) {
-      console.error('Error fetching gallery:', err);
+    } catch (err: any) {
+      if ((err as any)?.name === 'AbortError') {
+        setError('A ligação demorou demasiado. Verifique a sua rede.');
+      } else {
+        console.error('Error fetching gallery:', err);
+        setError('Falha na ligação à base de dados. Verifique a sua conexão.');
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
-  };
+  }, [user.id, filterType]);
 
   // Fetch when page or filter changes
   useEffect(() => {
     fetchGenerations(currentPage);
-  }, [currentPage, filterType, user.id]);
+  }, [currentPage, filterType, user.id, fetchGenerations]);
 
   // Reset to page 1 when filter changes
   useEffect(() => {
     setCurrentPage(1);
   }, [filterType]);
 
-  // Periodic refresh for processing items
+  // Intelligent polling when processing items are present
   useEffect(() => {
-    const interval = setInterval(() => {
-        if (items.some(i => i.status === 'processing')) {
-            fetchGenerations(currentPage);
-        }
-    }, 15000); 
-    return () => clearInterval(interval);
-  }, [items, currentPage]);
+    const processingItems = items.filter(i => i.status === 'processing');
+    if (processingItems.length === 0) return;
+
+    let delay = 8000; // Start at 8s for faster feedback
+    let timeoutId: ReturnType<typeof setTimeout>;
+
+    const poll = () => {
+      fetchGenerations(currentPage, true);
+      delay = Math.min(delay * 1.5, 30000);
+      timeoutId = setTimeout(poll, delay);
+    };
+
+    timeoutId = setTimeout(poll, delay);
+    return () => clearTimeout(timeoutId);
+  }, [items, currentPage, fetchGenerations]);
 
   const handlePublish = useCallback(async (item: any) => {
     if (!user.id || publishing) return;
@@ -113,12 +164,12 @@ export function Gallery({ generationProgress }: { generationProgress?: number | 
     }
   }, [user.id, publishing]);
 
-  const handleDelete = useCallback(async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
+  const handleDelete = useCallback(async (e: React.MouseEvent | null, id: string) => {
+    if (e) e.stopPropagation();
     setModal({
       isOpen: true,
       title: 'Excluir Criação',
-      message: 'Tem certeza?',
+      message: 'Tem certeza que deseja excluir permanentemente esta criação?',
       type: 'confirm',
       onConfirm: async () => {
         try {
@@ -126,10 +177,43 @@ export function Gallery({ generationProgress }: { generationProgress?: number | 
           if (response.ok) {
             setItems(prev => prev.filter(i => i.id !== id));
             setModal(prev => ({ ...prev, isOpen: false }));
-            // Refresh current page to fill the gap if needed
-            fetchGenerations(currentPage);
+            // If expanded campaign open, remove from internal items list
+            if (expandedCampaign) {
+              setExpandedCampaign(prev => {
+                if (!prev) return null;
+                const updatedItems = prev.items.filter((i: any) => i.id !== id);
+                if (updatedItems.length === 0) return null;
+                return { ...prev, items: updatedItems };
+              });
+            }
+            fetchGenerations(currentPage, true);
           }
         } catch (err) {}
+      }
+    });
+  }, [currentPage, expandedCampaign]);
+
+  const handleDeleteCampaign = useCallback(async (campaign: any) => {
+    setModal({
+      isOpen: true,
+      title: 'Excluir Projeto de Campanha',
+      message: `Tem certeza que deseja excluir permanentemente o projeto de campanha "${KIT_NAMES[campaign.model] || 'Campanha'}" com todos os seus ${campaign.items.length} frames?`,
+      type: 'confirm',
+      onConfirm: async () => {
+        try {
+          // Delete all items in the campaign sequentially
+          const deletePromises = campaign.items.map((i: any) =>
+            apiFetch(`/generations/${i.id}`, { method: 'DELETE' })
+          );
+          await Promise.all(deletePromises);
+          
+          setItems(prev => prev.filter(i => i.batch_id !== campaign.batch_id));
+          setExpandedCampaign(null);
+          setModal(prev => ({ ...prev, isOpen: false }));
+          fetchGenerations(currentPage);
+        } catch (err) {
+          console.error("Error deleting campaign:", err);
+        }
       }
     });
   }, [currentPage]);
@@ -163,6 +247,62 @@ export function Gallery({ generationProgress }: { generationProgress?: number | 
     link.click();
   };
 
+  const handleDownloadAllCampaign = async (campaign: any) => {
+    campaign.items.forEach((item: any, idx: number) => {
+      if (item.status === 'completed' && item.result_url) {
+        setTimeout(() => {
+          handleDownload(item.result_url, `conversio-${campaign.batch_id}-frame-${idx + 1}.png`);
+        }, idx * 300); // Small stagger to trigger multiple downloads safely in browser
+      }
+    });
+  };
+
+  // Group by batch_id if model is a kit
+  const getProcessedItems = () => {
+    const processed: any[] = [];
+    const seenBatches = new Set<string>();
+
+    items.forEach(item => {
+      if (item.batch_id) {
+        const isKit = item.model === 'branding-kit' || item.model === 'social-ads-kit' ||
+                      item.model === 'brand-amazon' || item.model === 'brand-cosmetics' ||
+                      item.model === 'brand-burger' || item.model === 'brand-sweets' || 
+                      (item.style && item.style.toLowerCase().includes('kit'));
+
+        if (isKit) {
+          if (!seenBatches.has(item.batch_id)) {
+            seenBatches.add(item.batch_id);
+            const batchItems = items.filter(i => i.batch_id === item.batch_id);
+            
+            // Derive collective status
+            const hasProcessing = batchItems.some(i => i.status === 'processing');
+            const allFailed = batchItems.every(i => i.status === 'failed');
+            const status = hasProcessing ? 'processing' : allFailed ? 'failed' : 'completed';
+
+            processed.push({
+              id: `campaign-${item.batch_id}`,
+              isCampaign: true,
+              batch_id: item.batch_id,
+              model: item.model,
+              prompt: item.prompt,
+              created_at: item.created_at,
+              items: batchItems,
+              status
+            });
+          }
+        } else {
+          processed.push(item);
+        }
+      } else {
+        processed.push(item);
+      }
+    });
+
+    return processed;
+  };
+
+  const processedItems = getProcessedItems();
+
   return (
     <>
     <div className="flex flex-col w-full animate-in fade-in duration-500 pb-20 h-[calc(100vh-120px)] overflow-hidden">
@@ -170,7 +310,7 @@ export function Gallery({ generationProgress }: { generationProgress?: number | 
         <div>
           <h1 className="text-3xl font-semibold text-text-primary tracking-tight mb-2">Sua Galeria</h1>
           <div className="flex items-center gap-3">
-            <p className="text-text-secondary text-sm">Organização por páginas • Mostrando {items.length} de {totalItems} gerações</p>
+            <p className="text-text-secondary text-sm">Mostrando {processedItems.length} pastas e criações de {totalItems} totais</p>
           </div>
         </div>
         
@@ -194,10 +334,10 @@ export function Gallery({ generationProgress }: { generationProgress?: number | 
         className="flex-1 overflow-y-auto pr-2 custom-scrollbar"
       >
         {loading ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-6 gap-3 overflow-hidden">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-6 gap-4 overflow-hidden">
              {[...Array(ITEMS_PER_PAGE)].map((_, i) => <SkeletonItem key={i} />)}
           </div>
-        ) : items.length === 0 ? (
+        ) : processedItems.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 opacity-40">
             <div className="w-16 h-16 rounded-full border border-dashed border-text-tertiary flex items-center justify-center mb-6">
                <ImageIcon size={32} className="text-text-tertiary" />
@@ -208,18 +348,31 @@ export function Gallery({ generationProgress }: { generationProgress?: number | 
             <p className="text-[10px] mt-2 text-text-tertiary opacity-60 text-center">As tuas gerações aparecerão aqui</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
-            {items.map(item => (
-              <GalleryItem 
-                key={item.id} 
-                item={item} 
-                onExpand={() => setExpandedItem(item)} 
-                onDelete={handleDelete} 
-                onDownload={handleDownload}
-                formatDate={formatDate}
-                progress={item.status === 'processing' ? generationProgress : null}
-              />
-            ))}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+            {processedItems.map(item => {
+              if (item.isCampaign) {
+                return (
+                  <CampaignCard 
+                    key={item.id}
+                    campaign={item}
+                    onOpen={() => setExpandedCampaign(item)}
+                    onDelete={() => handleDeleteCampaign(item)}
+                    formatDate={formatDate}
+                  />
+                );
+              }
+              return (
+                <GalleryItem 
+                  key={item.id} 
+                  item={item} 
+                  onExpand={() => setExpandedItem(item)} 
+                  onDelete={handleDelete} 
+                  onDownload={handleDownload}
+                  formatDate={formatDate}
+                  progress={item.status === 'processing' ? generationProgress : null}
+                />
+              );
+            })}
           </div>
         )}
 
@@ -252,7 +405,6 @@ export function Gallery({ generationProgress }: { generationProgress?: number | 
 
             <div className="flex items-center gap-1">
               {Array.from({ length: Math.min(5, totalPages) }).map((_, i) => {
-                // Show pages around current page if possible
                 let pageNum = i + 1;
                 if (totalPages > 5) {
                     if (currentPage > 3) pageNum = currentPage - 2 + i;
@@ -286,6 +438,19 @@ export function Gallery({ generationProgress }: { generationProgress?: number | 
           publishStatus={publishStatus}
         />
       )}
+
+      {expandedCampaign && (
+        <CampaignViewer 
+          campaign={expandedCampaign}
+          onClose={() => setExpandedCampaign(null)}
+          onSelectItem={(item) => setExpandedItem(item)}
+          onDownloadAll={() => handleDownloadAllCampaign(expandedCampaign)}
+          onDeleteCampaign={() => handleDeleteCampaign(expandedCampaign)}
+          onDeleteFrame={handleDelete}
+          formatDate={formatDate}
+          onDownload={handleDownload}
+        />
+      )}
     </div>
 
     <ConfirmationModal 
@@ -309,6 +474,261 @@ const SkeletonItem = () => (
         <div className="absolute bottom-4 left-4 right-4 h-2 bg-white/5 rounded-full" />
     </div>
 );
+
+// Gorgeous Stacked collage card representing a Campaign batch
+export function CampaignCard({ campaign, onOpen, onDelete, formatDate }: {
+  campaign: any;
+  onOpen: () => void;
+  onDelete: () => void;
+  formatDate: (d: string) => string;
+}) {
+  const completedItems = campaign.items.filter((i: any) => i.status === 'completed');
+  const totalFrames = campaign.items.length;
+  
+  const kitName = KIT_NAMES[campaign.model] || 'CAMPANHA MASTER';
+  const kitColorClass = KIT_COLORS[campaign.model] || 'from-yellow-500 to-amber-500';
+
+  return (
+    <div 
+      onClick={onOpen}
+      className="group relative aspect-[3/4] md:aspect-square rounded-2xl bg-surface border border-border-subtle shadow-md hover:shadow-2xl cursor-pointer transition-all duration-500 hover:scale-[1.02] active:scale-[0.97]"
+    >
+      {/* 3D Stack Collage of Images */}
+      <div className="absolute inset-0 p-3 pb-16 flex items-center justify-center overflow-hidden">
+        {campaign.status === 'processing' ? (
+          <div className="flex flex-col items-center gap-3">
+            <div className="relative flex items-center justify-center w-14 h-14">
+              <div className="absolute inset-0 rounded-full border-2 border-[#FFB800]/10" />
+              <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-[#FFB800] animate-spin" />
+              <Folder className="w-6 h-6 text-[#FFB800]" />
+            </div>
+            <span className="text-[9px] text-[#FFB800] font-black uppercase tracking-widest animate-pulse">
+              Gerando Kit...
+            </span>
+          </div>
+        ) : campaign.status === 'failed' ? (
+          <div className="flex flex-col items-center gap-2 text-center px-4">
+            <div className="w-12 h-12 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-400">
+              <AlertCircle size={24} />
+            </div>
+            <span className="text-[10px] text-red-400 font-bold uppercase">Campanha Falhou</span>
+          </div>
+        ) : (
+          <div className="relative w-full h-full flex items-center justify-center">
+            {/* Frame 3 (Bottom Layer) */}
+            {completedItems[2] && (
+              <img 
+                src={completedItems[2].result_url} 
+                alt="Stack 3" 
+                className="absolute w-2/3 aspect-square object-cover rounded-xl border border-white/5 opacity-40 shadow-lg translate-y-[-12px] rotate-[-6deg] transition-all duration-500 group-hover:rotate-[-10deg] group-hover:translate-x-[-15px]" 
+              />
+            )}
+            
+            {/* Frame 2 (Middle Layer) */}
+            {completedItems[1] && (
+              <img 
+                src={completedItems[1].result_url} 
+                alt="Stack 2" 
+                className="absolute w-2/3 aspect-square object-cover rounded-xl border border-white/5 opacity-70 shadow-xl translate-y-[-6px] rotate-[6deg] transition-all duration-500 group-hover:rotate-[10deg] group-hover:translate-x-[15px]" 
+              />
+            )}
+
+            {/* Frame 1 (Top Layer) */}
+            {completedItems[0] ? (
+              <img 
+                src={completedItems[0].result_url} 
+                alt="Stack 1" 
+                className="relative w-2/3 aspect-square object-cover rounded-xl border border-white/10 shadow-2xl transition-all duration-500 group-hover:scale-105" 
+              />
+            ) : (
+              <div className="w-2/3 aspect-square rounded-xl bg-white/5 flex items-center justify-center">
+                <Folder className="w-8 h-8 text-text-tertiary" />
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Floating Campaign Badge (Top Left) */}
+      <div className="absolute top-3 left-3 z-30 px-2.5 py-1 bg-black/80 backdrop-blur-md rounded-full border border-white/10 flex items-center gap-1.5 shadow-lg">
+        <span className={`w-1.5 h-1.5 rounded-full bg-gradient-to-r ${kitColorClass} animate-pulse`} />
+        <span className="text-[7px] font-black text-white uppercase tracking-[0.25em]">{kitName}</span>
+      </div>
+
+      {/* Floating Frames Count (Top Right) */}
+      <div className="absolute top-3 right-3 z-30 px-2 py-0.5 bg-white/10 backdrop-blur-md rounded-lg border border-white/5 text-[8px] font-black text-[#FFB800] uppercase tracking-wider">
+        {totalFrames} FRAMES
+      </div>
+
+      {/* Overlay Dark Gradient & Campaign Info Footer */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent flex flex-col justify-end p-4 z-20">
+        <div className="flex justify-between items-end">
+          <div className="max-w-[75%]">
+            <h3 className="text-white font-black text-xs tracking-tight line-clamp-1 group-hover:text-[#FFB800] transition-colors">
+              {campaign.prompt || 'Projeto de Marca'}
+            </h3>
+            <div className="flex items-center gap-2 mt-1">
+              <Layers size={10} className="text-text-secondary" />
+              <p className="text-white/50 text-[8px] font-bold uppercase tracking-widest">{formatDate(campaign.created_at)}</p>
+            </div>
+          </div>
+          
+          <button 
+            onClick={(e) => { e.stopPropagation(); onDelete(); }}
+            className="p-2 rounded-xl bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/20 transition-all opacity-0 group-hover:opacity-100 z-30"
+          >
+            <Trash2 size={12} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Fullscreen Modal Viewer for grouped Campaign batches
+export function CampaignViewer({ campaign, onClose, onSelectItem, onDownloadAll, onDeleteCampaign, onDeleteFrame, formatDate, onDownload }: {
+  campaign: any;
+  onClose: () => void;
+  onSelectItem: (item: any) => void;
+  onDownloadAll: () => void;
+  onDeleteCampaign: () => void;
+  onDeleteFrame: (e: React.MouseEvent, id: string) => void;
+  formatDate: (d: string) => string;
+  onDownload: (url: string, filename: string) => Promise<void> | void;
+}) {
+  const completedCount = campaign.items.filter((i: any) => i.status === 'completed').length;
+  const totalCount = campaign.items.length;
+  
+  const kitName = KIT_NAMES[campaign.model] || 'CAMPANHA MASTER';
+  const kitColorClass = KIT_COLORS[campaign.model] || 'from-yellow-500 to-amber-500';
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/95 backdrop-blur-xl flex items-center justify-center p-4 md:p-8 animate-in fade-in duration-300">
+      <div className="bg-[#0B0C10] border border-white/10 rounded-3xl w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden shadow-[0_0_80px_rgba(0,0,0,0.9)] animate-in zoom-in-95 duration-300">
+        
+        {/* Header Block */}
+        <div className="p-6 md:p-8 border-b border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-6 shrink-0 bg-white/[0.01]">
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-3">
+              <div className={`px-3 py-1 rounded-full bg-gradient-to-r ${kitColorClass} text-[8px] font-black text-white tracking-[0.2em]`}>
+                {kitName}
+              </div>
+              <span className="text-[10px] text-text-secondary">• {completedCount} de {totalCount} frames prontos</span>
+            </div>
+            
+            <h2 className="text-xl md:text-2xl font-black text-white tracking-tight line-clamp-1">
+              {campaign.prompt || 'Campanha de Branding Consistente'}
+            </h2>
+            <p className="text-xs text-text-tertiary">Criada a {formatDate(campaign.created_at)}</p>
+          </div>
+
+          <div className="flex items-center gap-3 flex-wrap">
+            <button 
+              onClick={onDownloadAll}
+              disabled={completedCount === 0}
+              className="px-5 py-2.5 rounded-full bg-[#FFB800] hover:bg-[#E0A200] disabled:bg-white/5 disabled:text-white/20 text-black font-black text-xs uppercase tracking-wider flex items-center gap-2 transition-all hover:scale-105 active:scale-95 shadow-[0_0_30px_rgba(255,184,0,0.2)] disabled:shadow-none"
+            >
+              <DownloadCloud size={14} />
+              Baixar Todos ({completedCount})
+            </button>
+
+            <button 
+              onClick={onDeleteCampaign}
+              className="px-5 py-2.5 rounded-full bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/20 font-black text-xs uppercase tracking-wider flex items-center gap-2 transition-all"
+            >
+              <Trash2 size={14} />
+              Excluir Campanha
+            </button>
+
+            <button 
+              onClick={onClose}
+              className="p-3 rounded-full bg-white/5 hover:bg-white/10 text-text-secondary hover:text-text-primary transition-all"
+            >
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+
+        {/* Frames Grid Scrollable Viewport */}
+        <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {campaign.items.map((item: any, idx: number) => {
+              const frameName = item.style || `Frame ${idx + 1}`;
+              
+              if (item.status === 'processing') {
+                return (
+                  <div key={item.id} className="relative aspect-square rounded-2xl overflow-hidden border border-[#FFB800]/20 bg-surface/30 p-4 flex flex-col items-center justify-center gap-3 animate-pulse">
+                    <div className="absolute inset-0 shimmer-dark opacity-20" />
+                    <div className="relative flex items-center justify-center w-12 h-12">
+                      <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-[#FFB800] animate-spin" />
+                      <Folder className="w-5 h-5 text-[#FFB800]" />
+                    </div>
+                    <span className="text-[8px] text-[#FFB800]/70 font-black uppercase tracking-widest">Frame {idx + 1}</span>
+                  </div>
+                );
+              }
+
+              if (item.status === 'failed') {
+                return (
+                  <div key={item.id} className="relative aspect-square rounded-2xl overflow-hidden border border-red-500/20 bg-red-950/10 p-4 flex flex-col items-center justify-center gap-3">
+                    <AlertCircle size={20} className="text-red-400" />
+                    <span className="text-[9px] text-red-400 font-bold uppercase">Erro no Frame {idx + 1}</span>
+                  </div>
+                );
+              }
+
+              return (
+                <div 
+                  key={item.id}
+                  onClick={() => onSelectItem(item)}
+                  className="group relative aspect-square rounded-2xl overflow-hidden bg-surface border border-border-subtle cursor-pointer shadow-md hover:shadow-2xl transition-all duration-300 hover:scale-[1.02]"
+                >
+                  <img 
+                    src={item.result_url} 
+                    alt={frameName} 
+                    className="w-full h-full object-cover"
+                    loading="lazy"
+                  />
+
+                  {/* Top-Right Order Frame Badge */}
+                  <div className="absolute top-3 right-3 z-10 px-2 py-0.5 bg-black/60 backdrop-blur-md rounded-lg border border-white/5 text-[8px] font-black text-white">
+                    FRAME {idx + 1}
+                  </div>
+
+                  {/* Individual Actions Overlay */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col justify-between p-3 z-20">
+                    <div className="flex justify-end">
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); onDeleteFrame(e, item.id); }}
+                        className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/20 transition-all"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+
+                    <div className="flex justify-between items-center">
+                      <span className="text-white font-bold text-[9px] line-clamp-1 max-w-[70%]">{frameName}</span>
+                      <button 
+                        onClick={(e) => { 
+                          e.stopPropagation();
+                          onDownload(item.result_url, `conversio-${campaign.batch_id}-frame-${idx + 1}.png`);
+                        }}
+                        className="p-1.5 rounded-lg bg-white/5 hover:bg-[#FFB800] hover:text-black border border-white/10 transition-all"
+                      >
+                        <Download size={12} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
+}
 
 export const GalleryItem = React.memo(({ item, onExpand, onDelete, onDownload, formatDate, progress: externalProgress }: { 
   item: any, 
@@ -420,7 +840,6 @@ export const GalleryItem = React.memo(({ item, onExpand, onDelete, onDownload, f
     );
   }
 
-  // High-performance priority: 1. AVIF Thumbnail, 2. WebP Thumbnail, 3. Original
   const thumbUrl = item.metadata?.thumb_url_avif || item.metadata?.thumb_url || item.result_url;
 
   return (
@@ -436,11 +855,11 @@ export const GalleryItem = React.memo(({ item, onExpand, onDelete, onDownload, f
                 {item.type === 'video' ? (
                     <div className="w-full h-full relative bg-black/40">
                         <video 
-                            src={`${item.result_url}${!item.metadata?.thumb_url ? '#t=0.5' : ''}`} 
+                            src={item.result_url}
                             poster={item.metadata?.thumb_url_avif || item.metadata?.thumb_url}
                             className={`w-full h-full object-cover transition-all duration-1000 ${loaded ? 'scale-100 opacity-100' : 'scale-110 opacity-0'}`} 
                             onLoadedData={() => setLoaded(true)}
-                            preload="metadata"
+                            preload="none"
                             muted
                             loop
                             playsInline
@@ -448,15 +867,35 @@ export const GalleryItem = React.memo(({ item, onExpand, onDelete, onDownload, f
                                 e.currentTarget.play();
                             }}
                             onMouseLeave={e => { 
-                                e.currentTarget.pause(); 
-                                if (!item.metadata?.thumb_url) e.currentTarget.currentTime = 0.5;
-                                else e.currentTarget.currentTime = 0;
+                                e.currentTarget.pause();
+                                e.currentTarget.currentTime = 0;
                             }}
                         />
                         <div className="absolute top-3 left-3 px-2 py-0.5 bg-black/60 backdrop-blur-md rounded-full flex items-center gap-1.5 border border-white/10 z-20">
                             <Play size={8} className="text-[#FFB800]" fill="#FFB800" />
                             <span className="text-[7px] font-black text-white uppercase tracking-[0.2em]">Visual</span>
                         </div>
+                    </div>
+                ) : (item.type === 'audio' || item.type === 'music' || item.type === 'musica' || item.type === 'voice') ? (
+                    <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-surface to-bg-base relative p-6">
+                        <div className="w-20 h-20 rounded-full bg-[#FFB800]/10 flex items-center justify-center text-[#FFB800] border border-[#FFB800]/20 shadow-[0_0_30px_rgba(255,184,0,0.1)] group-hover:scale-110 transition-transform duration-500">
+                            <Mic size={32} />
+                        </div>
+                        <p className="mt-4 text-[10px] font-black text-white uppercase tracking-widest text-center px-4 line-clamp-2">
+                            {item.metadata?.title || 'Geração de Áudio'}
+                        </p>
+                        
+                        <div className="absolute bottom-4 left-0 right-0 px-6 opacity-0 group-hover:opacity-100 transition-opacity">
+                             <div className="h-1 w-full bg-white/10 rounded-full overflow-hidden">
+                                 <div className="h-full bg-[#FFB800] animate-pulse w-1/3" />
+                             </div>
+                        </div>
+
+                        <div className="absolute top-3 left-3 px-2 py-0.5 bg-black/60 backdrop-blur-md rounded-full flex items-center gap-1.5 border border-white/10 z-20">
+                            <Mic size={8} className="text-[#FFB800]" />
+                            <span className="text-[7px] font-black text-white uppercase tracking-[0.2em]">Áudio</span>
+                        </div>
+                        <audio src={item.result_url} onLoadedData={() => setLoaded(true)} className="hidden" />
                     </div>
                 ) : (
                     <picture>
@@ -492,7 +931,7 @@ export const GalleryItem = React.memo(({ item, onExpand, onDelete, onDownload, f
                 <button 
                     onClick={e => {
                         e.stopPropagation();
-                        onDownload(item.result_url, `conversio-${item.id}.png`);
+                        onDownload(item.result_url, `conversio-${item.id}.${item.type === 'video' ? 'mp4' : (item.type === 'audio' || item.type === 'music' || item.type === 'musica') ? 'mp3' : 'png'}`);
                     }} 
                     className="p-2 rounded-xl bg-white/5 hover:bg-[#FFB800] hover:text-black border border-white/10 transition-all"
                 >

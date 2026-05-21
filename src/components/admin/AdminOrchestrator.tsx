@@ -4,7 +4,7 @@ import {
     Terminal, ShieldAlert, Zap, RefreshCw, Megaphone, Bot, X, Activity, Server,
     Database, Headphones, Brain, CheckCircle2, XCircle, Clock, Play, AlertTriangle,
     ChevronDown, ChevronUp, BarChart2, Users, Target, TrendingUp, Sparkles, Loader2,
-    Send, MessageSquare, Shield, Cpu, Network
+    Send, MessageSquare, Shield, Cpu, Network, Trash2
 } from 'lucide-react';
 import { useAgentsDashboard } from '../../hooks/useAgentsDashboard';
 import { apiFetch } from '../../lib/api';
@@ -146,6 +146,11 @@ function ActionPlanCard({ plan, onApprove, onReject, processing }:
                             <span className="text-[9px] text-zinc-500 uppercase tracking-wider">
                                 {typeConfig.label}
                             </span>
+                            {(plan.approved_by_name === 'Orquestrador IA' || (plan.status === 'completed' && !plan.approved_by_name)) && (
+                                <span className="px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/20 text-[8px] font-black uppercase tracking-widest flex items-center gap-1">
+                                    <Cpu size={8} /> Aprovado por IA
+                                </span>
+                            )}
                             <span className="text-[9px] text-zinc-600 ml-auto">
                                 {new Date(plan.suggested_at).toLocaleString('pt-AO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
                             </span>
@@ -237,9 +242,18 @@ function ActionPlanCard({ plan, onApprove, onReject, processing }:
                 )}
 
                 {plan.status === 'completed' && (
-                    <div className="mt-4 flex items-center gap-2 px-3 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
-                        <CheckCircle2 size={12} className="text-emerald-400" />
-                        <span className="text-[10px] text-emerald-400 font-bold">Concluído por {plan.approved_by_name || 'Admin'}</span>
+                    <div className="mt-4 flex items-center justify-between gap-2 px-3 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
+                        <div className="flex items-center gap-2">
+                            <CheckCircle2 size={12} className="text-emerald-400 shrink-0" />
+                            <span className="text-[10px] text-emerald-400 font-bold">
+                                Concluído por {plan.approved_by_name || 'Orquestrador IA'}
+                            </span>
+                        </div>
+                        {plan.executed_at && (
+                            <span className="text-[9px] text-zinc-600">
+                                {new Date(plan.executed_at).toLocaleString('pt-AO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                        )}
                     </div>
                 )}
             </div>
@@ -269,13 +283,18 @@ export default function AdminOrchestrator({ onClose }: { onClose: () => void }) 
     const [plans, setPlans] = useState<ActionPlan[]>([]);
     const [planCounts, setPlanCounts] = useState<PlanCounts>({ pending: '0', approved: '0', completed: '0', rejected: '0' });
     const [plansLoading, setPlansLoading] = useState(true);
-    const [filterStatus, setFilterStatus] = useState<string>('');
+    const [filterStatus, setFilterStatus] = useState<string>('pending_approval');
     const [processingPlan, setProcessingPlan] = useState<number | null>(null);
     const [triggeringAnalysis, setTriggeringAnalysis] = useState(false);
 
     const [cmdTaskType, setCmdTaskType] = useState('');
     const [cmdPayload, setCmdPayload] = useState('');
     const [sendingCmd, setSendingCmd] = useState(false);
+    
+    // Direct message state (leads tab)
+    const [directMsgLeadId, setDirectMsgLeadId] = useState<string | null>(null);
+    const [directMsgText, setDirectMsgText] = useState('');
+    const [sendingDirectMsg, setSendingDirectMsg] = useState(false);
     
     // Approval state
     const [pendingTasks, setPendingTasks] = useState<any[]>([]);
@@ -419,6 +438,52 @@ export default function AdminOrchestrator({ onClose }: { onClose: () => void }) 
         } catch (e) {}
     };
 
+    const sendDirectMessage = async (leadId: string) => {
+        if (!directMsgText.trim()) return;
+        setSendingDirectMsg(true);
+        try {
+            const res = await apiFetch(`/admin/leads/${leadId}/message`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: directMsgText })
+            });
+            const data = await res.json();
+            if (data.success) {
+                toast.success(data.message || 'Mensagem enviada!');
+                setDirectMsgLeadId(null);
+                setDirectMsgText('');
+                fetchRecentLeads();
+            } else {
+                toast.error(data.message || 'Erro ao enviar mensagem.');
+            }
+        } catch { toast.error('Erro de ligação.'); }
+        finally { setSendingDirectMsg(false); }
+    };
+
+    const triggerFollowup = async (lead: any) => {
+        try {
+            const res = await apiFetch(`/admin/leads/${lead.id}/followup`, { method: 'POST' });
+            const data = await res.json();
+            toast[data.success ? 'success' : 'error'](data.message || 'Erro.');
+        } catch { toast.error('Erro de ligação.'); }
+    };
+
+    const toggleHumanMode = async (lead: any) => {
+        const newHuman = !lead.needs_human;
+        try {
+            const res = await apiFetch(`/admin/leads/${lead.id}/toggle-human`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ human: newHuman })
+            });
+            const data = await res.json();
+            if (data.success) {
+                toast.success(data.message);
+                fetchRecentLeads();
+            } else { toast.error(data.message); }
+        } catch { toast.error('Erro de ligação.'); }
+    };
+
     const toggleAutopilot = async () => {
         const newValue = !isAutopilot;
         setIsAutopilot(newValue);
@@ -447,27 +512,39 @@ export default function AdminOrchestrator({ onClose }: { onClose: () => void }) 
     };
 
     const handleApproveTask = async (taskId: number) => {
+        setPendingTasks(prev => prev.filter(t => t.id !== taskId));
         try {
             const res = await apiFetch(`/orchestrator/tasks/${taskId}/approve`, { method: 'POST' });
             const data = await res.json();
-            if (data.success) fetchPendingActions();
-        } catch (e) { console.error(e); }
+            if (!data.success) fetchPendingActions();
+        } catch (e) { 
+            console.error(e); 
+            fetchPendingActions();
+        }
     };
 
     const handleRejectTask = async (taskId: number) => {
+        setPendingTasks(prev => prev.filter(t => t.id !== taskId));
         try {
             const res = await apiFetch(`/orchestrator/tasks/${taskId}/reject`, { method: 'POST' });
             const data = await res.json();
-            if (data.success) fetchPendingActions();
-        } catch (e) { console.error(e); }
+            if (!data.success) fetchPendingActions();
+        } catch (e) { 
+            console.error(e); 
+            fetchPendingActions();
+        }
     };
 
     const handleApproveCampaign = async (campaignId: number) => {
+        setPendingCampaigns(prev => prev.filter(c => c.id !== campaignId));
         try {
             const res = await apiFetch(`/campaigns/${campaignId}/launch`, { method: 'POST' });
             const data = await res.json();
-            if (data.success) fetchPendingActions();
-        } catch (e) { console.error(e); }
+            if (!data.success) fetchPendingActions();
+        } catch (e) { 
+            console.error(e); 
+            fetchPendingActions();
+        }
     };
 
     useEffect(() => {
@@ -531,6 +608,20 @@ export default function AdminOrchestrator({ onClose }: { onClose: () => void }) 
         } catch (e) { console.error(e); }
         finally {
             setTimeout(() => setTriggeringAnalysis(false), 5000);
+        }
+    };
+
+    const handleClearPlans = async () => {
+        if (!window.confirm('Tem a certeza que deseja limpar todo o registo de planos de ação? Esta operação não pode ser revertida.')) return;
+        try {
+            const res = await apiFetch('/admin/orchestrator/action-plans/clear', { method: 'POST' });
+            const data = await res.json();
+            if (data.success) {
+                await fetchPlans();
+                alert('Todos os planos foram eliminados!');
+            }
+        } catch (e) {
+            console.error(e);
         }
     };
 
@@ -605,7 +696,11 @@ export default function AdminOrchestrator({ onClose }: { onClose: () => void }) 
                                     key={agent.id}
                                     whileHover={{ scale: 1.02 }}
                                     whileTap={{ scale: 0.98 }}
-                                    onClick={() => setSelectedAgent(agent.id === selectedAgent ? null : agent.id)}
+                                    onClick={() => {
+                                        const newId = agent.id === selectedAgent ? null : agent.id;
+                                        setSelectedAgent(newId);
+                                        if (newId) setActiveTab('terminal');
+                                    }}
                                     className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-all text-center ${
                                         isSelected ? 'bg-[#FFB800]/5 border-[#FFB800]/30 shadow-[0_0_20px_rgba(255,184,0,0.05)]' : 'bg-zinc-900/30 border-zinc-800/50 hover:border-[#FFB800]/20'
                                     }`}
@@ -765,7 +860,6 @@ export default function AdminOrchestrator({ onClose }: { onClose: () => void }) 
                                     <div className="px-6 pt-4 pb-3 flex items-center gap-3 border-b border-zinc-800 shrink-0">
                                         <div className="flex items-center gap-2 flex-1 overflow-x-auto">
                                             {[
-                                                { value: '', label: 'Todos' },
                                                 { value: 'pending_approval', label: `Pendentes (${planCounts.pending})` },
                                                 { value: 'approved', label: `Aprovados (${planCounts.approved})` },
                                                 { value: 'completed', label: `Concluídos (${planCounts.completed})` },
@@ -784,6 +878,13 @@ export default function AdminOrchestrator({ onClose }: { onClose: () => void }) 
                                                 </button>
                                             ))}
                                         </div>
+                                        <button
+                                            onClick={handleClearPlans}
+                                            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/30 text-red-500 text-[11px] font-black uppercase tracking-wider hover:bg-red-500/20 transition-all shrink-0"
+                                        >
+                                            <Trash2 size={12} />
+                                            Limpar Registos
+                                        </button>
                                         <button
                                             onClick={handleTriggerAnalysis}
                                             disabled={triggeringAnalysis}
@@ -1012,20 +1113,43 @@ export default function AdminOrchestrator({ onClose }: { onClose: () => void }) 
                                     animate={{ opacity: 1 }}
                                     className="h-full flex flex-col p-8 overflow-y-auto"
                                 >
-                                    <div className="flex items-center justify-between mb-8">
+                                    <div className="flex items-center justify-between mb-5">
                                         <div className="flex flex-col">
-                                            <h2 className="text-2xl font-bold text-white uppercase tracking-tighter flex items-center gap-3">
-                                                <Users className="text-emerald-500" size={24} /> 
+                                            <h2 className="text-xl font-black text-white uppercase tracking-tighter flex items-center gap-2">
+                                                <Users className="text-emerald-500" size={20} />
                                                 Pipeline de Leads WhatsApp
                                             </h2>
-                                            <p className="text-zinc-500 text-xs mt-1">Sincronização em tempo real com a Evolution API</p>
+                                            <p className="text-zinc-600 text-[10px] mt-0.5">Sincronização em tempo real com a Evolution API</p>
                                         </div>
-                                        <button 
+                                        <button
                                             onClick={fetchRecentLeads}
-                                            className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-white transition-colors"
+                                            className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-500 hover:text-white transition-colors"
                                         >
-                                            <RefreshCw size={18} />
+                                            <RefreshCw size={16} />
                                         </button>
+                                    </div>
+
+                                    {/* Stats bar */}
+                                    <div className="grid grid-cols-4 gap-3 mb-6">
+                                        {[
+                                            { label: 'Total Leads', value: recentLeads.length, color: 'zinc', icon: Users },
+                                            { label: 'Qualificados', value: recentLeads.filter(l => l.status === 'qualified').length, color: 'emerald', icon: CheckCircle2 },
+                                            { label: 'Precisa Humano', value: recentLeads.filter(l => l.needs_human).length, color: 'amber', icon: Shield },
+                                            { label: 'Inativos (+3 dias)', value: recentLeads.filter(l => l.last_message_at && Math.floor((Date.now() - new Date(l.last_message_at).getTime()) / 86400000) > 3).length, color: 'red', icon: AlertTriangle },
+                                        ].map(stat => {
+                                            const StatIcon = stat.icon;
+                                            return (
+                                                <div key={stat.label} className={`bg-zinc-900/60 border border-${stat.color}-500/10 rounded-xl p-3 flex items-center gap-3`}>
+                                                    <div className={`w-8 h-8 rounded-lg bg-${stat.color}-500/10 flex items-center justify-center shrink-0`}>
+                                                        <StatIcon size={14} className={`text-${stat.color}-400`} />
+                                                    </div>
+                                                    <div>
+                                                        <p className={`text-lg font-black leading-none text-${stat.color}-400`}>{stat.value}</p>
+                                                        <p className="text-[9px] text-zinc-600 uppercase tracking-widest mt-0.5">{stat.label}</p>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
                                     </div>
 
                                     {recentLeads.length === 0 ? (
@@ -1035,44 +1159,128 @@ export default function AdminOrchestrator({ onClose }: { onClose: () => void }) 
                                         </div>
                                     ) : (
                                         <div className="grid gap-4">
-                                            {recentLeads.map((lead: any, i: number) => (
-                                                <div key={i} className="group flex items-center justify-between p-5 bg-zinc-900/40 border border-zinc-800/50 hover:border-emerald-500/30 rounded-2xl transition-all">
-                                                    <div className="flex items-center gap-4">
-                                                        <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500 font-bold">
-                                                            {lead.display_name?.charAt(0) || lead.name?.charAt(0) || '?'}
-                                                        </div>
-                                                        <div>
-                                                            <div className="flex items-center gap-2">
-                                                                <p className="font-bold text-white leading-tight">{lead.display_name || lead.name || 'Cliente Desconhecido'}</p>
-                                                                {lead.needs_human && (
-                                                                    <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-500 text-[9px] font-bold rounded uppercase flex items-center gap-1">
-                                                                        <Shield size={10} /> Humano
+                                            {recentLeads.map((lead: any, i: number) => {
+                                                const isExpanded = directMsgLeadId === String(lead.id);
+                                                const daysSince = lead.last_message_at
+                                                    ? Math.floor((Date.now() - new Date(lead.last_message_at).getTime()) / 86400000)
+                                                    : null;
+                                                const tempColor = lead.status === 'qualified' ? 'emerald' : lead.status === 'new' ? 'blue' : lead.status === 'interested' ? 'yellow' : 'zinc';
+                                                return (
+                                                    <motion.div
+                                                        key={lead.id || i}
+                                                        layout
+                                                        initial={{ opacity: 0, y: 8 }}
+                                                        animate={{ opacity: 1, y: 0 }}
+                                                        className={`bg-zinc-900/50 border rounded-2xl transition-all overflow-hidden ${
+                                                            isExpanded ? 'border-emerald-500/40 shadow-[0_0_20px_rgba(16,185,129,0.05)]' : 'border-zinc-800/60 hover:border-zinc-700'
+                                                        }`}
+                                                    >
+                                                        <div className="p-4 flex flex-col gap-3">
+                                                            {/* Top row: avatar + info + badges + actions */}
+                                                            <div className="flex items-center gap-3">
+                                                                {/* Avatar */}
+                                                                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-sm shrink-0 bg-${tempColor}-500/10 text-${tempColor}-400 border border-${tempColor}-500/20`}>
+                                                                    {(lead.display_name || lead.name || '?').charAt(0).toUpperCase()}
+                                                                </div>
+
+                                                                {/* Name + phone */}
+                                                                <div className="flex-1 min-w-0">
+                                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                                        <p className="font-bold text-white text-sm leading-none truncate">
+                                                                            {lead.display_name || lead.name || 'Desconhecido'}
+                                                                        </p>
+                                                                        {lead.needs_human && (
+                                                                            <span className="px-1.5 py-0.5 bg-amber-500/15 text-amber-400 text-[8px] font-black rounded-full uppercase border border-amber-500/20 flex items-center gap-1 shrink-0">
+                                                                                <Shield size={8} /> Humano
+                                                                            </span>
+                                                                        )}
+                                                                        <span className={`px-2 py-0.5 text-[8px] font-bold rounded-full uppercase shrink-0 bg-${tempColor}-500/10 text-${tempColor}-400 border border-${tempColor}-500/20`}>
+                                                                            {lead.status || 'lead'}
+                                                                        </span>
+                                                                    </div>
+                                                                    <p className="text-[10px] text-zinc-500 font-mono mt-1">{lead.whatsapp_number || '—'}</p>
+                                                                </div>
+
+                                                                {/* Last activity */}
+                                                                <div className="hidden md:flex flex-col items-end shrink-0">
+                                                                    <span className="text-[9px] text-zinc-600 uppercase tracking-widest">Última actividade</span>
+                                                                    <span className={`text-[10px] font-bold mt-0.5 ${daysSince !== null && daysSince > 3 ? 'text-red-400' : 'text-zinc-400'}`}>
+                                                                        {daysSince === 0 ? 'Hoje' : daysSince === 1 ? 'Ontem' : daysSince !== null ? `${daysSince}d atrás` : '—'}
                                                                     </span>
-                                                                )}
+                                                                </div>
+
+                                                                {/* Action buttons */}
+                                                                <div className="flex items-center gap-1.5 shrink-0">
+                                                                    <button
+                                                                        onClick={() => { setDirectMsgLeadId(isExpanded ? null : String(lead.id)); setDirectMsgText(''); }}
+                                                                        className={`px-2.5 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all border flex items-center gap-1 ${isExpanded ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400' : 'bg-emerald-500/5 border-emerald-500/20 text-emerald-500 hover:bg-emerald-500/15'}`}
+                                                                        title="Enviar mensagem directa"
+                                                                    >
+                                                                        <MessageSquare size={10} /> Msg
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => triggerFollowup(lead)}
+                                                                        className="px-2.5 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all border bg-blue-500/5 border-blue-500/20 text-blue-400 hover:bg-blue-500/15 flex items-center gap-1"
+                                                                        title="Agendar follow-up automático"
+                                                                    >
+                                                                        <RefreshCw size={10} /> Follow-up
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => toggleHumanMode(lead)}
+                                                                        className={`px-2.5 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all border flex items-center gap-1 ${lead.needs_human ? 'bg-amber-500/20 border-amber-500/40 text-amber-400' : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:text-amber-400 hover:border-amber-500/20'}`}
+                                                                        title={lead.needs_human ? 'Reactivar IA' : 'Pausar IA (modo humano)'}
+                                                                    >
+                                                                        <Bot size={10} /> {lead.needs_human ? 'IA Off' : 'IA On'}
+                                                                    </button>
+                                                                </div>
                                                             </div>
-                                                            <p className="text-xs text-zinc-500 font-mono mt-0.5">{lead.whatsapp_number || lead.phone}</p>
+
+                                                            {/* Inline message panel */}
+                                                            <AnimatePresence>
+                                                                {isExpanded && (
+                                                                    <motion.div
+                                                                        initial={{ height: 0, opacity: 0 }}
+                                                                        animate={{ height: 'auto', opacity: 1 }}
+                                                                        exit={{ height: 0, opacity: 0 }}
+                                                                        className="overflow-hidden"
+                                                                    >
+                                                                        <div className="border-t border-zinc-800 pt-3 mt-1">
+                                                                            <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2 flex items-center gap-1">
+                                                                                <MessageSquare size={10} /> Mensagem directa para {lead.display_name || lead.name} · WhatsApp
+                                                                            </p>
+                                                                            <textarea
+                                                                                value={directMsgText}
+                                                                                onChange={e => setDirectMsgText(e.target.value)}
+                                                                                placeholder="Escreve a mensagem em Português Angolano..."
+                                                                                rows={3}
+                                                                                className="w-full bg-black/50 border border-zinc-700 focus:border-emerald-500/40 rounded-xl px-4 py-3 text-sm text-white placeholder:text-zinc-600 outline-none resize-none transition-colors"
+                                                                            />
+                                                                            <div className="flex items-center justify-between mt-2">
+                                                                                <p className="text-[9px] text-amber-500/70 flex items-center gap-1">
+                                                                                    <Shield size={9} /> IA pausada automaticamente ao enviar.
+                                                                                </p>
+                                                                                <div className="flex gap-2">
+                                                                                    <button onClick={() => { setDirectMsgLeadId(null); setDirectMsgText(''); }} className="px-3 py-1.5 rounded-lg text-[10px] text-zinc-500 hover:text-zinc-300 border border-zinc-700 transition-all">
+                                                                                        Cancelar
+                                                                                    </button>
+                                                                                    <button
+                                                                                        onClick={() => sendDirectMessage(String(lead.id))}
+                                                                                        disabled={!directMsgText.trim() || sendingDirectMsg}
+                                                                                        className="px-4 py-1.5 rounded-lg text-[10px] font-black uppercase bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30 disabled:opacity-40 transition-all flex items-center gap-1.5"
+                                                                                    >
+                                                                                        {sendingDirectMsg ? <Loader2 size={10} className="animate-spin" /> : <Send size={10} />}
+                                                                                        Enviar via WhatsApp
+                                                                                    </button>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    </motion.div>
+                                                                )}
+                                                            </AnimatePresence>
                                                         </div>
-                                                    </div>
-                                                    
-                                                    <div className="flex items-center gap-8">
-                                                        <div className="hidden md:flex flex-col items-end">
-                                                            <span className="text-[10px] text-zinc-600 uppercase font-bold tracking-widest">Última Actividade</span>
-                                                            <span className="text-xs text-zinc-400">{lead.last_message_at ? new Date(lead.last_message_at).toLocaleTimeString() : 'Recentemente'}</span>
-                                                        </div>
-                                                        
-                                                        <div className="flex flex-col items-end min-w-[80px]">
-                                                            <span className="text-[10px] text-zinc-600 uppercase font-bold tracking-widest mb-1">Status</span>
-                                                            <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-tighter ${
-                                                                lead.status === 'qualified' ? 'bg-emerald-500/20 text-emerald-400' :
-                                                                lead.status === 'new' ? 'bg-blue-500/20 text-blue-400' :
-                                                                'bg-zinc-800 text-zinc-400'
-                                                            }`}>
-                                                                {lead.status}
-                                                            </span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            ))}
+                                                    </motion.div>
+                                                );
+                                            })}
                                         </div>
                                     )}
                                 </motion.div>
@@ -1088,8 +1296,17 @@ export default function AdminOrchestrator({ onClose }: { onClose: () => void }) 
                                 >
                                     <div className="flex-1 overflow-y-auto bg-zinc-950/50 border border-zinc-900 rounded-xl p-6 shadow-inner relative mb-4" style={{ scrollbarWidth: 'thin' }}>
                                         {liveTerminalOutput.length === 0 ? (
-                                            <div className="text-zinc-600 flex items-center gap-2">
-                                                <span className="w-2 h-2 bg-zinc-600 animate-pulse rounded-full" /> Aguardando inputs do sistema...
+                                            <div className="flex flex-col items-center justify-center h-full gap-3 text-zinc-600">
+                                                <Terminal size={32} className="opacity-30" />
+                                                <p className="text-xs font-mono">
+                                                    {selectedAgent
+                                                        ? `Nenhum log recente para "${systemAgents.find(a => a.id === selectedAgent)?.name}".`
+                                                        : 'Sistema activo. Seleccione um agente para filtrar os logs em tempo real.'}
+                                                </p>
+                                                <div className="flex items-center gap-2 text-[10px]">
+                                                    <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+                                                    <span className="text-green-500/60">KERNEL ONLINE</span>
+                                                </div>
                                             </div>
                                         ) : (
                                             <div className="space-y-4">

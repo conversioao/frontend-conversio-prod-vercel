@@ -45,11 +45,15 @@ export default function AdminWhatsAppLeads({ onClose, initialLeadId }: AdminWhat
   const [search, setSearch] = useState('');
   const [messageInput, setMessageInput] = useState('');
   const [agentGlobalEnabled, setAgentGlobalEnabled] = useState(true);
+  const [chatInstanceType, setChatInstanceType] = useState<'agent' | 'system'>('agent');
   const [activeTab, setActiveTab] = useState<'leads' | 'settings'>('leads');
   const [agentPrompt, setAgentPrompt] = useState('');
+  const [agentName, setAgentName] = useState('');
   const [adminPhone, setAdminPhone] = useState('');
   const [instanceStatus, setInstanceStatus] = useState<any>(null);
   const [isSavingConfig, setIsSavingConfig] = useState(false);
+  const [isSavingAgentConfig, setIsSavingAgentConfig] = useState(false);
+  const [selectedInstance, setSelectedInstance] = useState('venda');
   const [stats, setStats] = useState({
     total: 0,
     qualified: 0,
@@ -59,13 +63,21 @@ export default function AdminWhatsAppLeads({ onClose, initialLeadId }: AdminWhat
 
   const fetchLeads = async () => {
     try {
-      const res = await fetch(`${BASE_URL}/admin/whatsapp/leads?status=${filter}`, {
+      const res = await fetch(`${BASE_URL}/admin/whatsapp/leads?status=${filter}&instance=${selectedInstance}`, {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('conversio_token')}` }
       });
       const data = await res.json();
       if (data.success) {
         setLeads(data.leads);
         setAgentGlobalEnabled(data.agentEnabled);
+        
+        // Calculate stats for current view
+        setStats({
+          total: data.leads.length,
+          qualified: data.leads.filter((l: any) => l.status === 'qualified').length,
+          inProgress: data.leads.filter((l: any) => l.status === 'in_progress').length,
+          messagesToday: 0 // Fetching real message count would require a separate query or count in logs
+        });
       }
     } catch (e) {
       console.error('Error fetching leads:', e);
@@ -76,8 +88,8 @@ export default function AdminWhatsAppLeads({ onClose, initialLeadId }: AdminWhat
 
   const fetchConfig = async () => {
     try {
-        const [promptRes, phoneRes, statusRes] = await Promise.all([
-          fetch(`${BASE_URL}/admin/whatsapp/config/whatsapp_agent_prompt`, {
+        const [agentConfigRes, phoneRes, statusRes] = await Promise.all([
+          fetch(`${BASE_URL}/admin/whatsapp/agent-config/${selectedInstance}`, {
               headers: { 'Authorization': `Bearer ${localStorage.getItem('conversio_token')}` }
           }),
           fetch(`${BASE_URL}/admin/whatsapp/config/admin_whatsapp`, {
@@ -88,11 +100,14 @@ export default function AdminWhatsAppLeads({ onClose, initialLeadId }: AdminWhat
           })
         ]);
 
-        const promptData = await promptRes.json();
+        const agentConfigData = await agentConfigRes.json();
         const phoneData = await phoneRes.json();
         const statusData = await statusRes.json();
 
-        if (promptData.success) setAgentPrompt(promptData.value);
+        if (agentConfigData.success) {
+          setAgentPrompt(agentConfigData.agent.system_prompt || '');
+          setAgentName(agentConfigData.agent.name || '');
+        }
         if (phoneData.success) setAdminPhone(phoneData.value);
         if (statusData.success) setInstanceStatus(statusData);
 
@@ -102,7 +117,7 @@ export default function AdminWhatsAppLeads({ onClose, initialLeadId }: AdminWhat
   const [syncing, setSyncing] = useState(false);
 
   const syncChats = async () => {
-    if (!instanceStatus?.instanceName) {
+    if (!instanceStatus?.status?.instanceName) {
       alert('Aguarde o carregamento do status da instância.');
       return;
     }
@@ -114,7 +129,7 @@ export default function AdminWhatsAppLeads({ onClose, initialLeadId }: AdminWhat
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('conversio_token')}` 
         },
-        body: JSON.stringify({ instanceName: instanceStatus.instanceName })
+        body: JSON.stringify({ instanceName: selectedInstance })
       });
       const data = await res.json();
       if (data.success) {
@@ -153,6 +168,32 @@ export default function AdminWhatsAppLeads({ onClose, initialLeadId }: AdminWhat
     finally { setIsSavingConfig(false); }
   };
 
+  const saveAgentConfig = async () => {
+    setIsSavingAgentConfig(true);
+    try {
+      const res = await fetch(`${BASE_URL}/admin/whatsapp/agent-config/${selectedInstance}`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('conversio_token')}` 
+        },
+        body: JSON.stringify({ name: agentName, system_prompt: agentPrompt })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert('Configurações do agente salvas com sucesso!');
+        fetchConfig();
+      } else {
+        alert(`Erro ao salvar: ${data.message}`);
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Erro ao conectar com o servidor.');
+    } finally {
+      setIsSavingAgentConfig(false);
+    }
+  };
+
   const setupWebhook = async () => {
     setIsSavingConfig(true);
     try {
@@ -174,7 +215,7 @@ export default function AdminWhatsAppLeads({ onClose, initialLeadId }: AdminWhat
   const fetchMessages = async (leadId: string) => {
     setChatLoading(true);
     try {
-      const res = await fetch(`${BASE_URL}/admin/whatsapp/leads/${leadId}/messages`, {
+      const res = await fetch(`${BASE_URL}/admin/whatsapp/leads/${leadId}/messages?instance=${selectedInstance}`, {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('conversio_token')}` }
       });
       const data = await res.json();
@@ -189,18 +230,21 @@ export default function AdminWhatsAppLeads({ onClose, initialLeadId }: AdminWhat
   useEffect(() => {
     fetchLeads();
     fetchConfig();
+    // Reset conversation panel when switching instances
+    setSelectedLead(null);
+    setMessages([]);
     const interval = setInterval(fetchLeads, 5000);
     return () => clearInterval(interval);
-  }, [filter]);
+  }, [filter, selectedInstance]);
 
   // Auto-sync contacts when instance is available
   const [hasAutoSynced, setHasAutoSynced] = useState(false);
   useEffect(() => {
-    if (instanceStatus?.instanceName && !hasAutoSynced) {
+    if (instanceStatus?.status?.instanceName && !hasAutoSynced) {
       setHasAutoSynced(true);
       syncChats();
     }
-  }, [instanceStatus?.instanceName, hasAutoSynced]);
+  }, [instanceStatus?.status?.instanceName, hasAutoSynced]);
 
   useEffect(() => {
     if (initialLeadId && leads.length > 0) {
@@ -288,7 +332,28 @@ export default function AdminWhatsAppLeads({ onClose, initialLeadId }: AdminWhat
         <div className="flex items-center gap-8">
           <div className="flex flex-col">
             <h1 className="text-lg font-bold text-white tracking-tight">CRM & Leads</h1>
-            <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-medium">Instância: {instanceStatus?.instanceName || 'Carregando...'}</p>
+            <div className="flex items-center gap-2 bg-zinc-900/50 p-1 rounded-xl border border-zinc-800">
+              {instanceStatus?.instances ? (
+                instanceStatus.instances.map((inst: any, idx: number) => (
+                  <button 
+                    key={idx} 
+                    onClick={() => setSelectedInstance(inst.instanceName)}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
+                      selectedInstance === inst.instanceName 
+                        ? 'bg-zinc-800 text-[#FFB800] border border-zinc-700 shadow-lg' 
+                        : 'text-zinc-500 hover:text-zinc-300'
+                    }`}
+                  >
+                    <div className={`w-1.5 h-1.5 rounded-full ${inst.state === 'open' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-red-500'}`}></div>
+                    <span className="text-[10px] uppercase tracking-widest font-black">
+                      {inst.label}
+                    </span>
+                  </button>
+                ))
+              ) : (
+                <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-medium px-4">Carregando...</p>
+              )}
+            </div>
           </div>
 
           <div className="h-8 w-px bg-zinc-800 mx-2 hidden sm:block"></div>
@@ -476,6 +541,10 @@ export default function AdminWhatsAppLeads({ onClose, initialLeadId }: AdminWhat
                        </div>
                        
                        <div className="flex items-center gap-3">
+                          <div className="px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-lg flex items-center gap-2">
+                             <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></div>
+                             <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Feed Unificado</span>
+                          </div>
                           <button 
                             onClick={() => toggleLeadAgent(selectedLead)}
                             className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-[11px] uppercase transition-all ${
@@ -500,10 +569,17 @@ export default function AdminWhatsAppLeads({ onClose, initialLeadId }: AdminWhat
                             <div className={`p-4 rounded-2xl text-sm leading-relaxed ${
                               msg.role === 'user' 
                                 ? 'bg-zinc-900 text-zinc-300' 
-                                : 'bg-zinc-100 text-black font-medium'
+                                : msg.role === 'system'
+                                   ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+                                   : 'bg-zinc-100 text-black font-medium'
                             }`}>
                                <div className="flex items-center justify-between gap-8 mb-2 opacity-40 text-[9px] uppercase font-bold tracking-wider">
-                                  <span>{msg.role === 'user' ? 'Cliente' : 'Alex (IA)'}</span>
+                                  <span>
+                                    {msg.role === 'user' ? 'Cliente' : 
+                                     msg.role === 'system' ? 'Sistema (Conversio)' :
+                                     msg.role === 'human' ? 'Operador Humano' : 'Alex (IA)'}
+                                     {msg.instance_name && ` • ${msg.instance_name}`}
+                                  </span>
                                   <span>{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                                </div>
                                <p className="whitespace-pre-wrap">{msg.content}</p>
@@ -614,14 +690,14 @@ export default function AdminWhatsAppLeads({ onClose, initialLeadId }: AdminWhat
               <div className="flex items-center justify-between">
                  <div>
                    <h3 className="text-2xl font-bold text-white mb-2">Protocolos do Agente</h3>
-                   <p className="text-zinc-500 text-sm">Configure o comportamento e conhecimento do Alex (IA).</p>
+                   <p className="text-zinc-500 text-sm">Configure o comportamento e conhecimento do agente (IA).</p>
                  </div>
                  <button 
-                  onClick={() => updateGlobalConfig('whatsapp_agent_prompt', agentPrompt)}
-                  disabled={isSavingConfig}
+                  onClick={saveAgentConfig}
+                  disabled={isSavingAgentConfig}
                   className="px-8 py-3 bg-[#FFB800] text-black rounded-lg font-bold text-xs uppercase tracking-wider hover:opacity-90 transition-all flex items-center gap-2"
                  >
-                   {isSavingConfig ? <RefreshCcw className="animate-spin" size={14} /> : <Save size={14} />}
+                   {isSavingAgentConfig ? <RefreshCcw className="animate-spin" size={14} /> : <Save size={14} />}
                    Guardar Alterações
                  </button>
               </div>
@@ -630,9 +706,19 @@ export default function AdminWhatsAppLeads({ onClose, initialLeadId }: AdminWhat
                  <div className="lg:col-span-2 space-y-6">
                     <div className="bg-zinc-900/50 border border-zinc-800 p-6 rounded-xl">
                        <h4 className="text-sm font-bold text-white mb-2">Cérebro e Personalidade</h4>
-                       <p className="text-xs text-zinc-500 leading-relaxed">
-                         Defina como o Alex deve interagir. Use português de Angola (pt-AO) e mantenha um tom profissional mas acessível.
+                       <p className="text-xs text-zinc-500 leading-relaxed mb-4">
+                         Defina como o agente deve interagir. Use português de Angola (pt-AO) e mantenha um tom profissional mas acessível.
                        </p>
+                       <div className="space-y-2">
+                          <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">Nome do Agente</label>
+                          <input 
+                             type="text"
+                             value={agentName}
+                             onChange={(e) => setAgentName(e.target.value)}
+                             className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-sm text-zinc-300 focus:outline-none focus:border-[#FFB800]/30 transition-all"
+                             placeholder="Nome do agente (ex: Alex, Carlos...)"
+                          />
+                       </div>
                     </div>
                     
                     <textarea 

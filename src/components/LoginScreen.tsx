@@ -107,7 +107,7 @@ export function LoginScreen({ onLogin, onNavigate }: LoginScreenProps) {
           </div>
 
           <div className="forgot-password">
-            <button type="button" onClick={() => {}}>Esqueceste a senha?</button>
+            <button type="button" onClick={() => onNavigate('forgot-password')}>Esqueceste a senha?</button>
           </div>
 
           <button type="submit" disabled={isLoading} className="login-button">

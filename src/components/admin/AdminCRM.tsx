@@ -21,7 +21,9 @@ import {
   X,
   Bell,
   Bot,
-  Check
+  Check,
+  Play,
+  Pause
 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { ConfirmationModal } from '../ui/ConfirmationModal';
@@ -573,7 +575,6 @@ const CampaignList = () => {
     const [statsData, setStatsData] = useState<any>(null);
     const [loadingStats, setLoadingStats] = useState(false);
     const [filter, setFilter] = useState<'all' | 'running' | 'completed'>('all');
-
     useEffect(() => {
          fetchCampaigns();
          const i = setInterval(fetchCampaigns, 10000);
@@ -586,6 +587,20 @@ const CampaignList = () => {
               const data = await res.json();
               if (data.success) setCampaigns(data.campaigns);
          } finally { setLoading(false); }
+    };
+
+    const handleTogglePause = async (id: string, currentStatus: string, e: React.MouseEvent) => {
+         e.stopPropagation();
+         const endpoint = currentStatus === 'paused' ? 'resume' : 'pause';
+         try {
+              const res = await api.post(`/admin/crm/campaigns/${id}/${endpoint}`, {});
+              const data = await res.json();
+              if (data.success) {
+                   setCampaigns(prev => prev.map(c => c.id === id ? { ...c, status: currentStatus === 'paused' ? 'active' : 'paused' } : c));
+              }
+         } catch (e) {
+              console.error('[Toggle Pause Error]', e);
+         }
     };
 
     const handleViewDetails = async (id: string, e?: React.MouseEvent) => {
@@ -652,16 +667,41 @@ const CampaignList = () => {
                   {filteredCampaigns.map(camp => (
                        <div key={camp.id} onClick={() => handleViewDetails(camp.id)} className="cursor-pointer group bg-zinc-900 border border-zinc-800 p-6 rounded-xl hover:border-amber-500/20 transition-all relative overflow-hidden">
                             <div className="flex justify-between items-start mb-6">
-                                 <div className={`px-3 py-1 rounded text-[8px] font-bold uppercase tracking-widest border ${camp.status === 'completed' ? 'text-emerald-500 border-emerald-500/20' : 'text-amber-500 border-amber-500/20'}`}>
-                                      {camp.status}
+                                 <div className={`px-3 py-1 rounded text-[8px] font-bold uppercase tracking-widest border ${camp.status === 'completed' ? 'text-emerald-500 border-emerald-500/20' : camp.status === 'paused' ? 'text-zinc-500 border-zinc-500/20' : 'text-amber-500 border-amber-500/20'}`}>
+                                      {camp.status === 'active' ? 'Ativa' : camp.status === 'paused' ? 'Pausada' : camp.status === 'sending' ? 'Enviando' : camp.status === 'completed' ? 'Concluída' : camp.status}
                                  </div>
                                  <div className="flex items-center gap-2">
+                                      {camp.status !== 'completed' && (
+                                           <button 
+                                                onClick={(e) => handleTogglePause(camp.id, camp.status, e)}
+                                                className="p-1 rounded bg-zinc-850 text-zinc-400 hover:text-amber-500 hover:bg-zinc-800 transition-all border border-zinc-800"
+                                                title={camp.status === 'paused' ? 'Retomar Campanha' : 'Pausar Campanha'}
+                                           >
+                                                {camp.status === 'paused' ? <Play size={10} /> : <Pause size={10} />}
+                                           </button>
+                                      )}
                                       <button onClick={(e) => handleDeleteCampaign(camp.id, e)} className="text-zinc-600 hover:text-red-500 transition-all"><X size={14} /></button>
                                  </div>
                             </div>
                             <h4 className="text-sm font-bold text-white tracking-tight mb-2 group-hover:text-amber-500 transition-colors">{camp.name}</h4>
-                            <p className="text-[10px] text-zinc-500 line-clamp-2 mb-6 h-8 leading-relaxed">{camp.message_template}</p>
+                            <p className="text-[10px] text-zinc-500 line-clamp-2 mb-4 h-8 leading-relaxed">{camp.message_template}</p>
                             
+                            {/* Premium Amber Progress Bar */}
+                            <div className="space-y-2 mb-6 bg-zinc-950/40 p-3 rounded-xl border border-white/5">
+                                <div className="flex justify-between items-center text-[9px] font-bold uppercase tracking-wider text-zinc-500">
+                                    <span>Progresso de Envio</span>
+                                    <span className="text-amber-500">{camp.target_count > 0 ? Math.round(((camp.sent_count || 0) / camp.target_count) * 100) : 0}%</span>
+                                </div>
+                                <div className="w-full h-1.5 bg-zinc-850 rounded-full overflow-hidden border border-zinc-800">
+                                    <motion.div 
+                                        initial={{ width: 0 }}
+                                        animate={{ width: `${camp.target_count > 0 ? Math.min(100, Math.round(((camp.sent_count || 0) / camp.target_count) * 100)) : 0}%` }}
+                                        transition={{ duration: 0.8, ease: "easeOut" }}
+                                        className="h-full bg-gradient-to-r from-amber-500 to-amber-600 rounded-full shadow-[0_0_8px_rgba(245,158,11,0.4)]"
+                                    />
+                                </div>
+                            </div>
+
                             <div className="flex items-center justify-between pt-4 border-t border-zinc-800">
                                  <div className="text-[10px] font-bold text-zinc-400">
                                       {camp.sent_count || 0} / {camp.target_count || 0} <span className="text-zinc-600 text-[9px] uppercase">Enviados</span>
@@ -945,6 +985,7 @@ const AutomationView: React.FC<{
 }> = ({ automations, loading, setAutomations, setModal, onDelete }) => {
     const [showModal, setShowModal] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [generatingIA, setGeneratingIA] = useState(false);
     const [form, setForm] = useState({ name: '', delay_days: 0, message_template: '', trigger_type: 'days_after_signup' });
 
     const handleSave = async () => {
@@ -960,6 +1001,21 @@ const AutomationView: React.FC<{
             }
         } finally {
             setSaving(false);
+        }
+    };
+
+    const handleGenerateIA = async () => {
+        setGeneratingIA(true);
+        try {
+            const res = await api.post('/admin/crm/automations/generate', {});
+            const data = await res.json();
+            if (data.success && data.automations) {
+                setAutomations(prev => [...prev, ...data.automations]);
+            }
+        } catch (e) {
+            console.error('[Generate IA Automations Error]', e);
+        } finally {
+            setGeneratingIA(false);
         }
     };
 
@@ -981,12 +1037,21 @@ const AutomationView: React.FC<{
                     </h2>
                     <p className="text-[10px] font-bold text-text-tertiary uppercase tracking-widest mt-1">Estratégias de retenção automatizada pós-registo.</p>
                 </div>
-                <button 
-                    onClick={() => setShowModal(true)} 
-                    className="px-8 py-4 bg-bg-base border border-border-subtle hover:border-[#FFB800] text-text-secondary hover:text-[#FFB800] rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-3 active:scale-95 shadow-lg"
-                >
-                    <Plus className="w-5 h-5" /> Nova Sequência
-                </button>
+                <div className="flex items-center gap-4">
+                    <button 
+                        onClick={handleGenerateIA} 
+                        disabled={generatingIA}
+                        className="px-8 py-4 bg-gradient-to-r from-amber-500/10 to-amber-600/10 border border-amber-500/20 hover:border-amber-500 text-amber-500 hover:text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-3 active:scale-95 shadow-lg disabled:opacity-50"
+                    >
+                        <Bot className="w-5 h-5 animate-pulse" /> {generatingIA ? 'A Orquestrar...' : 'Orquestrar IA'}
+                    </button>
+                    <button 
+                        onClick={() => setShowModal(true)} 
+                        className="px-8 py-4 bg-bg-base border border-border-subtle hover:border-[#FFB800] text-text-secondary hover:text-[#FFB800] rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-3 active:scale-95 shadow-lg"
+                    >
+                        <Plus className="w-5 h-5" /> Nova Sequência
+                    </button>
+                </div>
             </div>
 
             {loading ? (

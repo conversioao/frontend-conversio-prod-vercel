@@ -559,6 +559,11 @@ export function AdminPlans() {
                      {data.models.filter(m => m.category === 'core').map(renderModelCard)}
                    </div>
                    
+                   <h4 className="text-xl font-bold text-white mt-12 uppercase tracking-widest pl-2 border-l-4 border-[#FFB800]">Kits & Agentes de Branding</h4>
+                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                     {data.models.filter(m => m.category === 'branding').map(renderModelCard)}
+                   </div>
+                   
                    <h4 className="text-xl font-bold text-white mt-12 uppercase tracking-widest pl-2 border-l-4 border-blue-500">Modelos Base</h4>
                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                      {data.models.filter(m => m.category === 'model').map(renderModelCard)}
@@ -619,6 +624,7 @@ export function AdminPlans() {
                                 <option value="model">Modelo Base</option>
                                 <option value="style">Estilo / Core</option>
                                 <option value="core">Motor Nativo</option>
+                                <option value="branding">Kit de Branding</option>
                              </select>
                           </div>
                           <div><label className="text-[10px] font-black uppercase text-text-tertiary mb-2 block">Custo Cliente (Créditos)</label><input type="number" className="bg-bg-base p-4 rounded-2xl w-full border border-border-subtle text-white text-[#FFB800]" value={newItem.credit_cost || 1} onChange={e => setNewItem({...newItem, credit_cost: e.target.value})} /></div>

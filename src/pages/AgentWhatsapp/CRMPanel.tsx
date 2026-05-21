@@ -10,8 +10,8 @@ export function CRMPanel({ onClose, onNavigateToLead, adminMode }: { onClose?: (
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [selectedContact, setSelectedContact] = useState<any>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [instances, setInstances] = useState<any[]>([]);
 
   useEffect(() => {
     fetchAll();
@@ -36,16 +36,19 @@ export function CRMPanel({ onClose, onNavigateToLead, adminMode }: { onClose?: (
   const fetchAll = async () => {
     try {
       if (contacts.length === 0) setLoading(true);
-      const [contactsRes, ordersRes] = await Promise.all([
+      const [contactsRes, ordersRes, agentsRes] = await Promise.all([
         apiFetch(`/agent/contacts${adminMode ? '?admin_leads=true' : ''}`),
-        apiFetch('/agent/orders')
+        apiFetch('/agent/orders'),
+        adminMode ? apiFetch('/admin/whatsapp/pentagon-agents') : Promise.resolve({ json: () => ({ success: false }) })
       ]);
       
       const contactsData = await contactsRes.json();
       const ordersData = await ordersRes.json();
+      const agentsData = await (agentsRes as any).json();
       
       if (contactsData.success) setContacts(contactsData.contacts);
       if (ordersData.success) setOrders(ordersData.orders);
+      if (agentsData.success) setInstances(agentsData.agents.filter((a: any) => ['venda', 'sistema'].includes(a.slug)));
     } catch (err) {
       console.error('Error fetching CRM data:', err);
     } finally {
@@ -116,6 +119,16 @@ export function CRMPanel({ onClose, onNavigateToLead, adminMode }: { onClose?: (
         </div>
 
         <div className="flex items-center gap-3">
+          {adminMode && instances.length > 0 && (
+            <div className="flex items-center gap-2 mr-4 bg-zinc-900/50 border border-zinc-800 rounded-xl px-3 py-1.5">
+              {instances.map(inst => (
+                <div key={inst.id} className="flex items-center gap-2 px-2 border-r last:border-0 border-zinc-800">
+                  <span className={`w-1.5 h-1.5 rounded-full ${inst.whatsapp_state === 'open' ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                  <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest">{inst.name}</span>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600" size={14} />
             <input 
@@ -360,6 +373,7 @@ export function CRMPanel({ onClose, onNavigateToLead, adminMode }: { onClose?: (
         {isModalOpen && selectedContact && !onNavigateToLead && (
           <ConversationModal 
             contact={selectedContact} 
+            adminMode={adminMode}
             onClose={() => {
               setIsModalOpen(false);
               fetchAll();

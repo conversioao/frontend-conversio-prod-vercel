@@ -23,6 +23,7 @@ import AdminCostCenter from './AdminCostCenter';
 import AdminPentagonControl from './AdminPentagonControl';
 import { AgentDashboard } from './AgentDashboard';
 import AdminCRM from './AdminCRM';
+import AdminGenerations from './AdminGenerations';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CRMPanel } from '../../pages/AgentWhatsapp/CRMPanel';
 import { BASE_URL } from '../../lib/api';
@@ -75,8 +76,10 @@ export function AdminLayout({ currentPage, onNavigate, onLogout, user }: AdminLa
     { id: 'admin-sales-crm', icon: <MessageSquare size={20} />, label: 'Sales CRM AI' },
     { id: 'admin-leads', icon: <Target size={20} />, label: 'Leads' },
     { id: 'admin-agents-panel', icon: <Sparkles size={20} />, label: 'Painel de Agentes' },
+    { id: 'admin-marketing', icon: <Target size={20} />, label: 'Gerador Marketing' },
     { id: 'admin-engine-monitor', icon: <Server size={20} />, label: 'Motor de Geração' },
     { id: 'admin-users', icon: <Users size={20} />, label: 'Utilizadores' },
+    { id: 'admin-generations', icon: <Sparkles size={20} />, label: 'Gerações' },
     { id: 'admin-payments', icon: <CreditCard size={20} />, label: 'Pagamentos' },
     { id: 'admin-analytics', icon: <BarChart2 size={20} />, label: 'Analytics' },
     { id: 'admin-financial', icon: <TrendingUp size={20} />, label: 'Financeiro' },
@@ -115,6 +118,7 @@ export function AdminLayout({ currentPage, onNavigate, onLogout, user }: AdminLa
       case 'admin-leads': return <AdminDashboard />; // Handled by overlay
       case 'admin-bank-settings': return <AdminBankSettings />;
       case 'admin-settings': return <AdminSettings />;
+      case 'admin-generations': return <AdminGenerations />;
       default: return <AdminDashboard />;
     }
   };
@@ -221,7 +225,7 @@ export function AdminLayout({ currentPage, onNavigate, onLogout, user }: AdminLa
              <button
                key={item.id}
                onClick={() => {
-                   if (item.id === 'marketing-agents') {
+                   if (item.id === 'admin-marketing' || item.id === 'marketing-agents') {
                        window.open('/conversio-agents-marketing.html', '_blank');
                    } else {
                        onNavigate(item.id);
